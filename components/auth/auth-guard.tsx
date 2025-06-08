@@ -59,8 +59,11 @@ export function AuthGuard({
           router.push(redirectTo)
         }
       } else if (event === 'SIGNED_IN' && session) {
-        const currentUser = await authService.getCurrentUser()
-        setUser(currentUser)
+        // Wait a moment for the session to be fully established
+        setTimeout(async () => {
+          const currentUser = await authService.getCurrentUser()
+          setUser(currentUser)
+        }, 500)
       }
     })
 
@@ -70,7 +73,10 @@ export function AuthGuard({
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
       </div>
     )
   }
