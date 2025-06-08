@@ -7,8 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, Clock, Users, Star, Heart, Filter, Search, Calendar, Navigation, Bot, ShoppingCart } from 'lucide-react';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { AuthGuard } from '@/components/auth/auth-guard';
+import { MapPin, Clock, Users, Star, Heart, Filter, Search, Calendar, Navigation, Bot, ShoppingCart, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { authService } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
 
 // Mock data for UK venues
 const mockVenues = [
@@ -116,12 +120,13 @@ const mockVenues = [
   }
 ];
 
-export default function ExplorePage() {
+function ExplorePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [selectedPrice, setSelectedPrice] = useState('All');
   const [currentLocation, setCurrentLocation] = useState('London, UK');
   const [filteredVenues, setFilteredVenues] = useState(mockVenues);
+  const router = useRouter();
 
   useEffect(() => {
     let filtered = mockVenues;
@@ -146,13 +151,22 @@ export default function ExplorePage() {
     setFilteredVenues(filtered);
   }, [searchTerm, selectedGenre, selectedPrice]);
 
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-purple-500/20">
+      <div className="sticky top-0 z-50 glass border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <Link href="/" className="text-2xl font-bold gradient-text">
               Evepass
             </Link>
             <div className="flex items-center space-x-4">
@@ -161,21 +175,30 @@ export default function ExplorePage() {
                 {currentLocation}
               </Button>
               <Link href="/ai-assistant">
-                <Button variant="outline" size="sm" className="border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-white">
+                <Button variant="outline" size="sm" className="glass glow-blue">
                   <Bot className="h-4 w-4 mr-2" />
                   Ask Eve AI
                 </Button>
               </Link>
               <Link href="/planner">
-                <Button variant="outline" size="sm" className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white">
+                <Button variant="outline" size="sm" className="glass">
                   Night Planner
                 </Button>
               </Link>
               <Link href="/safety">
-                <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                <Button size="sm" className="glass glow-green">
                   DrunkSafe™
                 </Button>
               </Link>
+              <ThemeToggle />
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -186,16 +209,16 @@ export default function ExplorePage() {
         <div className="mb-8">
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search venues, events, or locations..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white/10 border-purple-500/30 text-white placeholder:text-gray-400"
+                className="pl-10 glass border-border/50"
               />
             </div>
             <Select value={selectedGenre} onValueChange={setSelectedGenre}>
-              <SelectTrigger className="w-full md:w-48 bg-white/10 border-purple-500/30 text-white">
+              <SelectTrigger className="w-full md:w-48 glass border-border/50">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -209,7 +232,7 @@ export default function ExplorePage() {
               </SelectContent>
             </Select>
             <Select value={selectedPrice} onValueChange={setSelectedPrice}>
-              <SelectTrigger className="w-full md:w-32 bg-white/10 border-purple-500/30 text-white">
+              <SelectTrigger className="w-full md:w-32 glass border-border/50">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -226,7 +249,7 @@ export default function ExplorePage() {
         {/* Venues Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredVenues.map((venue) => (
-            <Card key={venue.id} className="bg-white/5 border-purple-500/20 backdrop-blur-lg hover:bg-white/10 transition-all duration-300 group cursor-pointer">
+            <Card key={venue.id} className="glass border-border/50 hover-lift group cursor-pointer">
               <div className="relative">
                 <img 
                   src={venue.image} 
@@ -234,12 +257,12 @@ export default function ExplorePage() {
                   className="w-full h-48 object-cover rounded-t-lg"
                 />
                 <div className="absolute top-3 right-3">
-                  <Button size="sm" variant="ghost" className="bg-black/50 hover:bg-black/70">
+                  <Button size="sm" variant="ghost" className="glass hover:bg-red-500/20">
                     <Heart className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="absolute bottom-3 left-3">
-                  <Badge className={`${venue.bookingAvailable ? 'bg-green-600' : 'bg-red-600'} text-white`}>
+                  <Badge className={`${venue.bookingAvailable ? 'bg-green-500' : 'bg-red-500'} text-white`}>
                     {venue.bookingAvailable ? 'Available' : 'Sold Out'}
                   </Badge>
                 </div>
@@ -248,17 +271,17 @@ export default function ExplorePage() {
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="text-white group-hover:text-purple-400 transition-colors">
+                    <CardTitle className="text-foreground group-hover:text-primary transition-colors">
                       {venue.name}
                     </CardTitle>
-                    <CardDescription className="text-gray-400 flex items-center mt-1">
+                    <CardDescription className="text-muted-foreground flex items-center mt-1">
                       <MapPin className="h-3 w-3 mr-1" />
                       {venue.location} • {venue.distance}
                     </CardDescription>
                   </div>
                   <div className="flex items-center space-x-1">
-                    <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                    <span className="text-sm text-gray-300">{venue.rating}</span>
+                    <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                    <span className="text-sm text-muted-foreground">{venue.rating}</span>
                   </div>
                 </div>
               </CardHeader>
@@ -266,65 +289,65 @@ export default function ExplorePage() {
               <CardContent className="pt-0">
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Type:</span>
-                    <span className="text-white">{venue.type}</span>
+                    <span className="text-muted-foreground">Type:</span>
+                    <span className="text-foreground">{venue.type}</span>
                   </div>
                   
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Open until:</span>
-                    <span className="text-white flex items-center">
+                    <span className="text-muted-foreground">Open until:</span>
+                    <span className="text-foreground flex items-center">
                       <Clock className="h-3 w-3 mr-1" />
                       {venue.openUntil}
                     </span>
                   </div>
                   
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Capacity:</span>
-                    <span className="text-white flex items-center">
+                    <span className="text-muted-foreground">Capacity:</span>
+                    <span className="text-foreground flex items-center">
                       <Users className="h-3 w-3 mr-1" />
                       {venue.capacity}
                     </span>
                   </div>
                   
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Price Range:</span>
-                    <span className="text-white">{venue.priceRange}</span>
+                    <span className="text-muted-foreground">Price Range:</span>
+                    <span className="text-foreground">{venue.priceRange}</span>
                   </div>
                   
                   <div className="space-y-2">
-                    <div className="text-sm text-gray-400">Current Event:</div>
-                    <div className="text-sm text-purple-400 font-medium">{venue.currentEvent}</div>
+                    <div className="text-sm text-muted-foreground">Current Event:</div>
+                    <div className="text-sm text-primary font-medium">{venue.currentEvent}</div>
                   </div>
                   
                   <div className="flex flex-wrap gap-1">
                     {venue.genres.slice(0, 3).map((genre) => (
-                      <Badge key={genre} variant="secondary" className="bg-purple-600/20 text-purple-300 text-xs">
+                      <Badge key={genre} variant="secondary" className="bg-primary/20 text-primary text-xs">
                         {genre}
                       </Badge>
                     ))}
                   </div>
                   
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted-foreground">
                     Popular with {venue.popularWith}
                   </div>
                   
                   <div className="flex gap-2 pt-2">
                     <Button 
                       size="sm" 
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                      className="flex-1 glass glow-green hover-lift"
                       disabled={!venue.bookingAvailable}
                     >
                       {venue.bookingAvailable ? 'Book Table' : 'Sold Out'}
                     </Button>
                     {venue.hasMenu && (
                       <Link href={`/menu/${venue.name.toLowerCase().replace(/\s+/g, '-')}`}>
-                        <Button size="sm" variant="outline" className="border-green-400 text-green-400 hover:bg-green-400 hover:text-white">
+                        <Button size="sm" variant="outline" className="glass glow-blue">
                           <ShoppingCart className="h-3 w-3 mr-1" />
                           Menu
                         </Button>
                       </Link>
                     )}
-                    <Button size="sm" variant="outline" className="border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-white">
+                    <Button size="sm" variant="outline" className="glass">
                       Add to Plan
                     </Button>
                   </div>
@@ -336,9 +359,9 @@ export default function ExplorePage() {
 
         {filteredVenues.length === 0 && (
           <div className="text-center py-12">
-            <div className="text-gray-400 text-lg">No venues found matching your criteria</div>
+            <div className="text-muted-foreground text-lg">No venues found matching your criteria</div>
             <Button 
-              className="mt-4" 
+              className="mt-4 glass" 
               variant="outline"
               onClick={() => {
                 setSearchTerm('');
@@ -352,5 +375,13 @@ export default function ExplorePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ExplorePageWithAuth() {
+  return (
+    <AuthGuard allowedUserTypes={['customer']}>
+      <ExplorePage />
+    </AuthGuard>
   );
 }
