@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Clock, MapPin, Users, Star, Plus, Trash2, Share2, Save } from 'lucide-react';
 import Link from 'next/link';
 
@@ -57,7 +57,7 @@ export default function NightPlannerPage() {
   const [plannedVenues, setPlannedVenues] = useState([]);
   const [planName, setPlanName] = useState('Epic Saturday Night');
 
-  const handleDragEnd = (result) => {
+  const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
 
     const { source, destination } = result;
