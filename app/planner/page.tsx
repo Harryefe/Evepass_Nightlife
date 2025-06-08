@@ -53,8 +53,10 @@ const availableVenues = [
   }
 ];
 
+type Venue = typeof availableVenues[number];
+
 export default function NightPlannerPage() {
-  const [plannedVenues, setPlannedVenues] = useState([]);
+  const [plannedVenues, setPlannedVenues] = useState<Venue[]>([]);
   const [planName, setPlanName] = useState('Epic Saturday Night');
 
   const handleDragEnd = (result: DropResult) => {
@@ -81,7 +83,7 @@ export default function NightPlannerPage() {
     }
   };
 
-  const removeFromPlan = (venueId) => {
+  const removeFromPlan = (venueId: string) => {
     setPlannedVenues(plannedVenues.filter(v => v.id !== venueId));
   };
 
