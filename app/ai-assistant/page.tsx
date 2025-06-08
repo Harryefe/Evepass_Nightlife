@@ -11,8 +11,28 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Define interfaces for type safety
+interface Venue {
+  id: number;
+  name: string;
+  type: string;
+  rating: number;
+  distance: string;
+  priceRange: string;
+  currentEvent: string;
+}
+
+interface Message {
+  id: number;
+  type: 'ai' | 'user';
+  content: string;
+  timestamp: Date;
+  suggestions?: string[];
+  venues?: Venue[];
+}
+
 // Mock conversation data
-const initialMessages = [
+const initialMessages: Message[] = [
   {
     id: 1,
     type: 'ai',
@@ -27,7 +47,7 @@ const initialMessages = [
   }
 ];
 
-const mockVenueRecommendations = [
+const mockVenueRecommendations: Venue[] = [
   {
     id: 1,
     name: 'Fabric',
@@ -49,7 +69,7 @@ const mockVenueRecommendations = [
 ];
 
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -67,9 +87,9 @@ export default function AIAssistantPage() {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    const userMessage = {
+    const userMessage: Message = {
       id: Date.now(),
-      type: 'user' as const,
+      type: 'user',
       content: inputValue,
       timestamp: new Date()
     };
@@ -86,7 +106,7 @@ export default function AIAssistantPage() {
     }, 1500);
   };
 
-  const generateAIResponse = (userInput: string): any => {
+  const generateAIResponse = (userInput: string): Message => {
     const input = userInput.toLowerCase();
     
     if (input.includes('venue') || input.includes('club') || input.includes('bar')) {
@@ -218,7 +238,7 @@ export default function AIAssistantPage() {
                         {/* Venue Recommendations */}
                         {message.venues && (
                           <div className="mt-4 space-y-3">
-                            {message.venues.map((venue: any) => (
+                            {message.venues.map((venue) => (
                               <div key={venue.id} className="p-3 bg-white/10 rounded-lg border border-purple-500/20">
                                 <div className="flex items-center justify-between mb-2">
                                   <h4 className="text-white font-medium">{venue.name}</h4>
@@ -240,7 +260,7 @@ export default function AIAssistantPage() {
                         {/* Suggestions */}
                         {message.suggestions && (
                           <div className="mt-4 flex flex-wrap gap-2">
-                            {message.suggestions.map((suggestion: string, index: number) => (
+                            {message.suggestions.map((suggestion, index) => (
                               <Button
                                 key={index}
                                 size="sm"
