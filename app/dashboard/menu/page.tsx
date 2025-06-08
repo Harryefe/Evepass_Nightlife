@@ -15,8 +15,36 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Define interfaces for type safety
+interface MenuItem {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  image: string;
+  popular: boolean;
+  available: boolean;
+  sales: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+interface NewItemForm {
+  name: string;
+  description: string;
+  price: string;
+  category: string;
+  image: string;
+  available: boolean;
+}
+
 // Mock menu data
-const mockMenuItems = [
+const mockMenuItems: MenuItem[] = [
   {
     id: 1,
     name: 'Fabric Fizz',
@@ -63,7 +91,7 @@ const mockMenuItems = [
   }
 ];
 
-const categories = [
+const categories: Category[] = [
   { id: 'cocktails', name: 'Signature Cocktails', icon: '🍸' },
   { id: 'spirits', name: 'Premium Spirits', icon: '🥃' },
   { id: 'beer', name: 'Beers & Ciders', icon: '🍺' },
@@ -71,11 +99,11 @@ const categories = [
 ];
 
 export default function MenuManagementPage() {
-  const [menuItems, setMenuItems] = useState(mockMenuItems);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(mockMenuItems);
   const [activeTab, setActiveTab] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [newItem, setNewItem] = useState({
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [newItem, setNewItem] = useState<NewItemForm>({
     name: '',
     description: '',
     price: '',
@@ -85,7 +113,7 @@ export default function MenuManagementPage() {
   });
 
   const handleAddItem = () => {
-    const item = {
+    const item: MenuItem = {
       id: Date.now(),
       ...newItem,
       price: parseFloat(newItem.price),
@@ -104,7 +132,7 @@ export default function MenuManagementPage() {
     setShowAddForm(false);
   };
 
-  const handleEditItem = (item: any) => {
+  const handleEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setNewItem({
       name: item.name,
@@ -118,6 +146,8 @@ export default function MenuManagementPage() {
   };
 
   const handleUpdateItem = () => {
+    if (!editingItem) return;
+    
     setMenuItems(menuItems.map(item => 
       item.id === editingItem.id 
         ? { ...item, ...newItem, price: parseFloat(newItem.price) }

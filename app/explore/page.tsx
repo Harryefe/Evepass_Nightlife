@@ -14,8 +14,27 @@ import Link from 'next/link';
 import { authService } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 
+// Define interfaces for type safety
+interface Venue {
+  id: number;
+  name: string;
+  type: string;
+  location: string;
+  rating: number;
+  priceRange: string;
+  image: string;
+  openUntil: string;
+  capacity: number;
+  genres: string[];
+  distance: string;
+  currentEvent: string;
+  bookingAvailable: boolean;
+  popularWith: string;
+  hasMenu: boolean;
+}
+
 // Mock data for UK venues
-const mockVenues = [
+const mockVenues: Venue[] = [
   {
     id: 1,
     name: "Fabric",
@@ -125,7 +144,7 @@ function ExplorePage() {
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [selectedPrice, setSelectedPrice] = useState('All');
   const [currentLocation, setCurrentLocation] = useState('London, UK');
-  const [filteredVenues, setFilteredVenues] = useState(mockVenues);
+  const [filteredVenues, setFilteredVenues] = useState<Venue[]>(mockVenues);
   const router = useRouter();
 
   useEffect(() => {

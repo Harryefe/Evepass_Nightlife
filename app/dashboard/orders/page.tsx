@@ -12,8 +12,27 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Define interfaces for type safety
+interface OrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+interface Order {
+  id: string;
+  customerName: string;
+  items: OrderItem[];
+  total: number;
+  paymentMethod: 'card' | 'cash';
+  status: 'pending' | 'cash-pending' | 'completed' | 'cancelled';
+  timestamp: string;
+  tableNumber: string;
+  cashCode: string | null;
+}
+
 // Mock orders data
-const mockOrders = [
+const mockOrders: Order[] = [
   {
     id: 'ORD-001',
     customerName: 'Sarah Wilson',
@@ -73,7 +92,7 @@ const mockOrders = [
 ];
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState<Order[]>(mockOrders);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 

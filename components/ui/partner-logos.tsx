@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/card';
 
 const partners = [
-  { name: 'Fabric', logo: '🎵' },
+  { name: 'Fabric London', logo: '🎵' },
   { name: 'Ministry of Sound', logo: '🎧' },
   { name: 'XOYO', logo: '✨' },
   { name: 'Printworks', logo: '🏭' },
@@ -17,7 +17,7 @@ export function PartnerLogos() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="text-2xl font-bold mb-4">Trusted by London's Premier Venues</h2>
-          <p className="text-muted-foreground">Join thousands of venues already using Evepass</p>
+          <p className="text-muted-foreground">Join the network of top nightlife destinations</p>
         </div>
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
@@ -27,7 +27,7 @@ export function PartnerLogos() {
                 <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">
                   {partner.logo}
                 </div>
-                <div className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                <div className="text-sm font-medium text-muted-foreground">
                   {partner.name}
                 </div>
               </div>

@@ -12,8 +12,36 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Define interfaces for type safety
+interface MenuItem {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  popular?: boolean;
+}
+
+interface MenuCategory {
+  id: string;
+  name: string;
+  items: MenuItem[];
+}
+
+interface VenueInfo {
+  name: string;
+  location: string;
+  rating: number;
+  image: string;
+}
+
+interface MenuData {
+  venue: VenueInfo;
+  categories: MenuCategory[];
+}
+
 // Mock menu data
-const menuData = {
+const menuData: MenuData = {
   venue: {
     name: 'Fabric London',
     location: 'Farringdon, EC1M 3HN',
@@ -112,7 +140,13 @@ const menuData = {
   ]
 };
 
-export default function MenuPage({ params }: { params: { venueId: string } }) {
+interface MenuPageProps {
+  params: {
+    venueId: string;
+  };
+}
+
+export default function MenuPage({ params }: MenuPageProps) {
   const [cart, setCart] = useState<{[key: number]: number}>({});
   const [activeCategory, setActiveCategory] = useState('cocktails');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash'>('card');
@@ -422,7 +456,7 @@ export default function MenuPage({ params }: { params: { venueId: string } }) {
                 <div className="p-3 bg-yellow-600/20 border border-yellow-600/40 rounded-lg">
                   <div className="flex items-center space-x-2 text-yellow-400 text-sm">
                     <AlertCircle className="h-4 w-4" />
-                    <span>You'll receive a code to show staff when paying</span>
+                    <span>You&apos;ll receive a code to show staff when paying</span>
                   </div>
                 </div>
               )}
