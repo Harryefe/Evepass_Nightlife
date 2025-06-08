@@ -10,12 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, MapPin, Phone, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, MapPin, Phone, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { authService } from '@/lib/auth';
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [userType, setUserType] = useState<'customer' | 'business'>('customer');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,6 +24,7 @@ export default function SignupPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    confirmPassword: '',
     first_name: '',
     last_name: '',
     date_of_birth: '',
@@ -37,10 +39,54 @@ export default function SignupPage() {
   });
   const router = useRouter();
 
+  // Calculate age from date of birth
+  const calculateAge = (dateOfBirth: string): number => {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
+  // Validate form data
+  const validateForm = (): string | null => {
+    // Password validation
+    if (formData.password.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      return 'Passwords do not match';
+    }
+
+    // Age validation for customers
+    if (userType === 'customer' && formData.date_of_birth) {
+      const age = calculateAge(formData.date_of_birth);
+      if (age < 18) {
+        return 'You must be 18 or older to create an account';
+      }
+    }
+
+    return null;
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+
+    // Validate form
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const userData = {
@@ -68,14 +114,53 @@ export default function SignupPage() {
       const redirectPath = userType === 'business' ? '/dashboard' : '/explore';
       router.push(redirectPath);
     } catch (err: any) {
+      console.error('Signup error:', err);
       setError(err.message || 'Failed to create account');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const nextStep = () => setStep(step + 1);
+  const nextStep = () => {
+    // Validate current step before proceeding
+    if (step === 1) {
+      if (!formData.email || !formData.password || !formData.confirmPassword || !formData.first_name || !formData.last_name) {
+        setError('Please fill in all required fields');
+        return;
+      }
+      
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+
+      if (formData.password.length < 8) {
+        setError('Password must be at least 8 characters long');
+        return;
+      }
+    }
+    
+    setError('');
+    setStep(step + 1);
+  };
+
   const prevStep = () => setStep(step - 1);
+
+  const getPasswordStrength = (password: string): { strength: number; label: string; color: string } => {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+    if (strength <= 2) return { strength: strength * 20, label: 'Weak', color: 'bg-red-500' };
+    if (strength <= 3) return { strength: strength * 20, label: 'Fair', color: 'bg-yellow-500' };
+    if (strength <= 4) return { strength: strength * 20, label: 'Good', color: 'bg-blue-500' };
+    return { strength: 100, label: 'Strong', color: 'bg-green-500' };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -134,7 +219,7 @@ export default function SignupPage() {
                 {step === 1 && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="email\" className="text-foreground">Email</Label>
+                      <Label htmlFor="email" className="text-foreground">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -172,6 +257,66 @@ export default function SignupPage() {
                           {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                       </div>
+                      {formData.password && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Password strength:</span>
+                            <span className={`font-medium ${
+                              passwordStrength.label === 'Strong' ? 'text-green-500' :
+                              passwordStrength.label === 'Good' ? 'text-blue-500' :
+                              passwordStrength.label === 'Fair' ? 'text-yellow-500' : 'text-red-500'
+                            }`}>
+                              {passwordStrength.label}
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full transition-all duration-300 ${passwordStrength.color}`}
+                              style={{ width: `${passwordStrength.strength}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          placeholder="Confirm your password"
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                          className="pl-10 pr-10 glass border-border/50"
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      {formData.confirmPassword && (
+                        <div className="flex items-center space-x-2 text-xs">
+                          {formData.password === formData.confirmPassword ? (
+                            <>
+                              <CheckCircle className="h-3 w-3 text-green-500" />
+                              <span className="text-green-500">Passwords match</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="h-3 w-3 text-red-500" />
+                              <span className="text-red-500">Passwords do not match</span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -222,6 +367,16 @@ export default function SignupPage() {
                         className="glass border-border/50"
                         required
                       />
+                      {formData.date_of_birth && (
+                        <div className="text-xs text-muted-foreground">
+                          Age: {calculateAge(formData.date_of_birth)} years old
+                          {calculateAge(formData.date_of_birth) < 18 && (
+                            <span className="text-red-500 ml-2">
+                              (Must be 18 or older)
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -268,7 +423,7 @@ export default function SignupPage() {
                       <Button 
                         type="submit" 
                         className="flex-1 glass glow-green hover-lift"
-                        disabled={isLoading}
+                        disabled={isLoading || (formData.date_of_birth && calculateAge(formData.date_of_birth) < 18)}
                       >
                         {isLoading ? (
                           <div className="flex items-center space-x-2">

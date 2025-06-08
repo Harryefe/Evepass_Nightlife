@@ -11,57 +11,78 @@ export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, userData: any) {
     try {
-      // First, sign up the user
+      console.log('Starting signup process for:', email, 'Type:', userData.user_type)
+      
+      // First, sign up the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             user_type: userData.user_type,
-            ...userData
+            email: email
           }
         }
       })
 
-      if (authError) throw authError
-
-      if (!authData.user) {
-        throw new Error('User creation failed')
+      if (authError) {
+        console.error('Auth signup error:', authError)
+        throw authError
       }
 
-      // Wait a moment for the auth state to be established
-      await new Promise(resolve => setTimeout(resolve, 100))
+      if (!authData.user) {
+        throw new Error('User creation failed - no user returned')
+      }
 
-      // Create profile in appropriate table with explicit user ID
+      console.log('Auth user created:', authData.user.id)
+
+      // Wait for auth state to be established
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Prepare profile data with explicit user ID
       const profileData = {
         id: authData.user.id,
-        email: authData.user.email,
+        email: email,
+        user_type: userData.user_type,
         ...userData
       }
 
+      console.log('Creating profile with data:', profileData)
+
+      // Create profile in appropriate table
       if (userData.user_type === 'customer') {
-        const { error: profileError } = await supabase
+        const { data: profileResult, error: profileError } = await supabase
           .from('customers')
           .insert(profileData)
+          .select()
         
         if (profileError) {
           console.error('Customer profile creation error:', profileError)
+          // Clean up auth user if profile creation fails
+          await supabase.auth.admin.deleteUser(authData.user.id)
           throw new Error(`Failed to create customer profile: ${profileError.message}`)
         }
+        
+        console.log('Customer profile created:', profileResult)
       } else if (userData.user_type === 'business') {
-        const { error: profileError } = await supabase
+        const { data: profileResult, error: profileError } = await supabase
           .from('businesses')
           .insert(profileData)
+          .select()
         
         if (profileError) {
           console.error('Business profile creation error:', profileError)
+          // Clean up auth user if profile creation fails
+          await supabase.auth.admin.deleteUser(authData.user.id)
           throw new Error(`Failed to create business profile: ${profileError.message}`)
         }
+        
+        console.log('Business profile created:', profileResult)
       }
 
       return authData
     } catch (error) {
-      console.error('Signup error:', error)
+      console.error('Complete signup error:', error)
       throw error
     }
   },
