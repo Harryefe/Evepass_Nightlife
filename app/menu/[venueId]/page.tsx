@@ -12,6 +12,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// Generate static params for static export
+export async function generateStaticParams() {
+  return [
+    { venueId: 'fabric-london' }
+  ];
+}
+
 // Mock menu data
 const menuData = {
   venue: {
