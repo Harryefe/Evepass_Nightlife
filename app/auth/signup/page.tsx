@@ -45,6 +45,8 @@ export default function SignupPage() {
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
+    if (!dateOfBirth) return 0;
+    
     const today = new Date();
     const birthDate = new Date(dateOfBirth);
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -55,6 +57,12 @@ export default function SignupPage() {
     }
     
     return age;
+  };
+
+  // Check if user is under 18
+  const isUnderAge = (): boolean => {
+    if (!formData.date_of_birth) return false;
+    return calculateAge(formData.date_of_birth) < 18;
   };
 
   // Validate form data
@@ -277,7 +285,7 @@ export default function SignupPage() {
                 {step === 1 && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="email\" className="text-foreground">Email</Label>
+                      <Label htmlFor="email" className="text-foreground">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -428,7 +436,7 @@ export default function SignupPage() {
                       {formData.date_of_birth && (
                         <div className="text-xs text-muted-foreground">
                           Age: {calculateAge(formData.date_of_birth)} years old
-                          {calculateAge(formData.date_of_birth) < 18 && (
+                          {isUnderAge() && (
                             <span className="text-red-500 ml-2">
                               (Must be 18 or older)
                             </span>
@@ -481,7 +489,7 @@ export default function SignupPage() {
                       <Button 
                         type="submit" 
                         className="flex-1 glass glow-green hover-lift"
-                        disabled={isLoading || (formData.date_of_birth !== '' && calculateAge(formData.date_of_birth) < 18)}
+                        disabled={isLoading || isUnderAge()}
                       >
                         {isLoading ? (
                           <div className="flex items-center space-x-2">
