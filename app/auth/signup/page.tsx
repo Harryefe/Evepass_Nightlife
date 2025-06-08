@@ -13,6 +13,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, MapPin, Phone, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { authService } from '@/lib/auth';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -39,6 +40,9 @@ export default function SignupPage() {
   });
   const router = useRouter();
 
+  // Check if Supabase is configured
+  const supabaseConfigured = isSupabaseConfigured();
+
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string): number => {
     const today = new Date();
@@ -55,6 +59,11 @@ export default function SignupPage() {
 
   // Validate form data
   const validateForm = (): string | null => {
+    // Check Supabase configuration first
+    if (!supabaseConfigured) {
+      return 'Database connection not configured. Please check your environment variables.';
+    }
+
     // Password validation
     if (formData.password.length < 8) {
       return 'Password must be at least 8 characters long';
@@ -115,7 +124,19 @@ export default function SignupPage() {
       router.push(redirectPath);
     } catch (err: any) {
       console.error('Signup error:', err);
-      setError(err.message || 'Failed to create account');
+      let errorMessage = 'Failed to create account';
+      
+      if (err.message) {
+        if (err.message.includes('fetch')) {
+          errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+        } else if (err.message.includes('Invalid API key')) {
+          errorMessage = 'Database configuration error. Please contact support.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +182,43 @@ export default function SignupPage() {
   };
 
   const passwordStrength = getPasswordStrength(formData.password);
+
+  // Show configuration warning if Supabase is not configured
+  if (!supabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-red-500">Configuration Required</CardTitle>
+            <CardDescription>
+              Supabase database connection is not configured
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center space-x-2 text-red-500 mb-2">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium">Database Not Connected</span>
+              </div>
+              <p className="text-sm text-red-500/80">
+                Please configure your Supabase environment variables in <code>.env.local</code>
+              </p>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p className="mb-2">Required environment variables:</p>
+              <ul className="list-disc list-inside space-y-1 font-mono text-xs">
+                <li>NEXT_PUBLIC_SUPABASE_URL</li>
+                <li>NEXT_PUBLIC_SUPABASE_ANON_KEY</li>
+              </ul>
+            </div>
+            <Button asChild className="w-full">
+              <Link href="/">Return to Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -219,7 +277,7 @@ export default function SignupPage() {
                 {step === 1 && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="email\" className="text-foreground">Email</Label>
+                      <Label htmlFor="email" className="text-foreground">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input

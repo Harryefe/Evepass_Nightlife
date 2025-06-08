@@ -1,12 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // Check if we have valid Supabase credentials
-const hasValidCredentials = supabaseUrl !== 'https://placeholder.supabase.co' && 
+const hasValidCredentials = supabaseUrl && 
+                           supabaseAnonKey &&
+                           supabaseUrl !== 'https://placeholder.supabase.co' && 
                            supabaseAnonKey !== 'placeholder-key' &&
                            supabaseUrl.includes('.supabase.co')
+
+if (!hasValidCredentials) {
+  console.error('Supabase configuration error: Please check your environment variables')
+  console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl)
+  console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
