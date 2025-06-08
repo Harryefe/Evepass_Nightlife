@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, isSupabaseConfigured } from './supabase'
 
 export interface AuthUser {
   id: string
@@ -11,6 +11,11 @@ export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, userData: any) {
     try {
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        throw new Error('Database connection not configured. Please check your environment variables.');
+      }
+
       console.log('Starting signup process for:', email, 'Type:', userData.user_type)
       
       // First, sign up the user with Supabase Auth
@@ -89,6 +94,11 @@ export const authService = {
 
   // Sign in user
   async signIn(email: string, password: string) {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      throw new Error('Database connection not configured. Please check your environment variables.');
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -100,6 +110,11 @@ export const authService = {
 
   // Sign out user
   async signOut() {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      throw new Error('Database connection not configured. Please check your environment variables.');
+    }
+
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   },
@@ -107,6 +122,12 @@ export const authService = {
   // Get current user with profile
   async getCurrentUser(): Promise<AuthUser | null> {
     try {
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        console.error('Supabase not configured')
+        return null
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) return null
@@ -140,6 +161,11 @@ export const authService = {
   // Check if user is authenticated
   async isAuthenticated(): Promise<boolean> {
     try {
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        return false
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       return !!user
     } catch (error) {

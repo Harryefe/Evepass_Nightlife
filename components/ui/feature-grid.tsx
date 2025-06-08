@@ -1,96 +1,91 @@
-'use client'
+'use client';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { 
-  Bot, CreditCard, Shield, MapPin, Calendar, Zap, 
-  Trophy, Users, Star 
-} from 'lucide-react'
+  Bot, Shield, CreditCard, Calendar, Users, Star, 
+  MapPin, Clock, Zap, Heart, Navigation, ShoppingCart
+} from 'lucide-react';
 
 const features = [
   {
     icon: Bot,
     title: 'Eve AI Assistant',
-    description: 'Conversational AI with voice commands for venue discovery and night planning',
-    color: 'text-purple-500',
-    glow: 'glow-purple'
-  },
-  {
-    icon: CreditCard,
-    title: 'Real-Time Ordering',
-    description: 'Order drinks and food directly from your table with secure card or cash payments',
-    color: 'text-pink-500',
-    glow: 'glow-pink'
+    description: 'Your personal nightlife companion powered by advanced AI',
+    badge: 'AI Powered',
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-500/10'
   },
   {
     icon: Shield,
-    title: 'Secure Cash Verification',
-    description: 'Dual-confirmation system with QR codes for fraud-proof cash transactions',
+    title: 'DrunkSafe™ Technology',
+    description: 'Real-time safety monitoring and smart intervention',
+    badge: 'Safety First',
     color: 'text-green-500',
-    glow: 'glow-green'
+    bgColor: 'bg-green-500/10'
   },
   {
-    icon: MapPin,
-    title: 'Smart Discovery',
-    description: 'Find venues by UK postcode with real-time availability and AI recommendations',
+    icon: CreditCard,
+    title: 'Seamless Payments',
+    description: 'Order drinks with card or cash verification codes',
+    badge: 'Secure',
     color: 'text-purple-500',
-    glow: 'glow-purple'
+    bgColor: 'bg-purple-500/10'
   },
   {
     icon: Calendar,
-    title: 'AI Night Planner',
-    description: 'Intelligent route planning across multiple venues with optimal timing',
-    color: 'text-yellow-500',
-    glow: 'glow-yellow'
-  },
-  {
-    icon: Zap,
-    title: 'DrunkSafe™ Suite',
-    description: 'BAC calculator, budget alerts, ride scheduling, and emergency features',
-    color: 'text-blue-500',
-    glow: 'glow-blue'
-  },
-  {
-    icon: Trophy,
-    title: 'Gamified Rewards',
-    description: 'Earn points, unlock VIP tiers, and compete on leaderboards',
-    color: 'text-yellow-500',
-    glow: 'glow-yellow'
+    title: 'Smart Planning',
+    description: 'AI-powered night planning with venue recommendations',
+    badge: 'Intelligent',
+    color: 'text-pink-500',
+    bgColor: 'bg-pink-500/10'
   },
   {
     icon: Users,
-    title: 'Social Reviews',
-    description: 'Share experiences with photos and help others discover gems',
-    color: 'text-purple-500',
-    glow: 'glow-purple'
+    title: 'Social Features',
+    description: 'Connect with friends and discover new experiences',
+    badge: 'Social',
+    color: 'text-yellow-500',
+    bgColor: 'bg-yellow-500/10'
   },
   {
     icon: Star,
-    title: 'VIP Access',
-    description: 'Skip queues, exclusive events, and member-only benefits',
-    color: 'text-pink-500',
-    glow: 'glow-pink'
+    title: 'Premium Venues',
+    description: 'Access to exclusive venues and VIP experiences',
+    badge: 'Exclusive',
+    color: 'text-orange-500',
+    bgColor: 'bg-orange-500/10'
   }
-]
+];
 
 export function FeatureGrid() {
   return (
     <div className="py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Revolutionary Nightlife Experience</h2>
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Everything You Need for the Perfect Night
+          </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            From AI-powered discovery to secure cash payments, we've reimagined every aspect of nightlife
+            From AI-powered recommendations to safety monitoring, Evepass has every aspect of your nightlife covered
           </p>
         </div>
-
+        
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
-            <Card key={index} className={`glass border-border/50 hover-lift ${feature.glow}`}>
+            <Card key={index} className="glass border-border/50 hover-lift group">
               <CardHeader>
-                <div className={`inline-flex p-3 rounded-lg bg-background/50 mb-4 ${feature.color}`}>
-                  <feature.icon className="h-6 w-6" />
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`p-3 rounded-lg ${feature.bgColor}`}>
+                    <feature.icon className={`h-6 w-6 ${feature.color}`} />
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/20 text-primary">
+                    {feature.badge}
+                  </Badge>
                 </div>
-                <CardTitle className="text-foreground">{feature.title}</CardTitle>
+                <CardTitle className="text-foreground group-hover:text-primary transition-colors">
+                  {feature.title}
+                </CardTitle>
                 <CardDescription className="text-muted-foreground">
                   {feature.description}
                 </CardDescription>
@@ -100,5 +95,5 @@ export function FeatureGrid() {
         </div>
       </div>
     </div>
-  )
+  );
 }
