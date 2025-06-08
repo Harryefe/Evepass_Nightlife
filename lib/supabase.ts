@@ -4,11 +4,11 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // Check if we have valid Supabase credentials
-const hasValidCredentials = supabaseUrl && 
+const hasValidCredentials = !!(supabaseUrl && 
                            supabaseAnonKey &&
                            supabaseUrl !== 'https://placeholder.supabase.co' && 
                            supabaseAnonKey !== 'placeholder-key' &&
-                           supabaseUrl.includes('.supabase.co')
+                           supabaseUrl.includes('.supabase.co'))
 
 if (!hasValidCredentials) {
   console.error('Supabase configuration error: Please check your environment variables')
