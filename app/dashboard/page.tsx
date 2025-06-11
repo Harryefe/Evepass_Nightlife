@@ -16,6 +16,7 @@ import {
   Upload, MapPin, Clock, DollarSign, Eye, Heart, Phone, ShoppingCart, QrCode
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Mock analytics data
 const revenueData = [
@@ -54,8 +55,15 @@ export default function BusinessDashboard() {
       <div className="border-b border-purple-500/20 bg-black/50 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Evepass Business
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/evepass-logo-white-01.png"
+                alt="Evepass Business"
+                width={150}
+                height={45}
+                className="h-8 w-auto"
+              />
+              <span className="ml-2 text-lg font-medium text-purple-300">Business</span>
             </Link>
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm">

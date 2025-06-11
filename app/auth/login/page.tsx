@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { authService } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
@@ -125,8 +126,14 @@ export default function LoginPage() {
 
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <Link href="/" className="text-4xl font-bold gradient-text mb-2 block">
-              Evepass
+            <Link href="/" className="inline-block mb-4">
+              <Image
+                src="/High-res PNG-01.png"
+                alt="Evepass"
+                width={200}
+                height={60}
+                className="h-12 w-auto"
+              />
             </Link>
             <p className="text-muted-foreground">Welcome back to the night</p>
           </div>

@@ -9,6 +9,7 @@ import { PartnerLogos } from '@/components/ui/partner-logos';
 import { FeatureGrid } from '@/components/ui/feature-grid';
 import { MapPin, Calendar, Users, Shield, Trophy, Star, Bot, Zap, CreditCard, Menu, X } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Home() {
   const [userType, setUserType] = useState<'customer' | 'business' | null>(null);
@@ -21,8 +22,15 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
-              <Link href="/" className="text-2xl font-bold gradient-text">
-                Evepass
+              <Link href="/" className="flex items-center">
+                <Image
+                  src="/High-res PNG-01.png"
+                  alt="Evepass"
+                  width={150}
+                  height={45}
+                  className="h-8 w-auto"
+                  priority
+                />
               </Link>
               
               {/* Desktop Navigation */}
@@ -115,9 +123,16 @@ export default function Home() {
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-32">
           <div className="text-center fade-in">
-            <h1 className="text-5xl md:text-7xl font-bold gradient-text mb-6">
-              Evepass
-            </h1>
+            <div className="mb-8">
+              <Image
+                src="/High-res PNG-01.png"
+                alt="Evepass"
+                width={400}
+                height={120}
+                className="mx-auto h-20 md:h-28 w-auto"
+                priority
+              />
+            </div>
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
               The UK's Premier AI-Powered Nightlife Platform
             </p>
@@ -266,8 +281,14 @@ export default function Home() {
       <footer className="border-t border-border py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-2xl font-bold gradient-text mb-4 md:mb-0">
-              Evepass
+            <div className="mb-4 md:mb-0">
+              <Image
+                src="/High-res PNG-01.png"
+                alt="Evepass"
+                width={120}
+                height={36}
+                className="h-6 w-auto"
+              />
             </div>
             <div className="flex space-x-6 text-muted-foreground">
               <a href="#" className="hover:text-foreground transition-colors">Privacy</a>

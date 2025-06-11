@@ -10,6 +10,7 @@ import {
   MapPin, Calendar, CreditCard, Star, Navigation
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Define interfaces for type safety
 interface Venue {

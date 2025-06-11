@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { MapPin, Clock, Users, Star, Heart, Filter, Search, Calendar, Navigation, Bot, ShoppingCart, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { authService } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 
@@ -185,8 +186,14 @@ function ExplorePage() {
       <div className="sticky top-0 z-50 glass border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold gradient-text">
-              Evepass
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/High-res PNG-01.png"
+                alt="Evepass"
+                width={150}
+                height={45}
+                className="h-8 w-auto"
+              />
             </Link>
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm">

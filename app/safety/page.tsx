@@ -13,6 +13,7 @@ import {
   Heart, Thermometer, Zap, Users, Map, MessageCircle, Plus, Minus
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function SafetyPage() {
   const [spentTonight, setSpentTonight] = useState(87);
@@ -177,7 +178,7 @@ export default function SafetyPage() {
                       </Button>
                       <div className="flex-1 text-center">
                         <div className="text-2xl font-bold text-foreground">{drinks}</div>
-                        <div className="text-xs text-muted-foreground">drinks</div>
+                        <div className="text-xs text-m uted-foreground">drinks</div>
                       </div>
                       <Button 
                         size="sm" 
