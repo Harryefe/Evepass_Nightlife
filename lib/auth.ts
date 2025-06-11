@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string
   email: string
   user_type: 'customer' | 'business'
-  profile: any
+  profile: any | null
 }
 
 export const authService = {
@@ -139,11 +139,17 @@ export const authService = {
         .from(tableName)
         .select('*')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error('Profile fetch error:', error)
-        return null
+        // Return user with null profile if profile fetch fails
+        return {
+          id: user.id,
+          email: user.email!,
+          user_type: userType,
+          profile: null
+        }
       }
 
       return {
