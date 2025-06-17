@@ -1,20 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
 // Check if we have valid Supabase credentials
-const hasValidCredentials = !!(supabaseUrl && 
-                           supabaseAnonKey &&
-                           supabaseUrl !== 'https://placeholder.supabase.co' && 
-                           supabaseAnonKey !== 'placeholder-key' &&
-                           supabaseUrl.includes('.supabase.co'))
+const hasValidCredentials = !!(
+  supabaseUrl && 
+  supabaseAnonKey &&
+  supabaseUrl.startsWith('https://') &&
+  supabaseUrl.includes('.supabase.co') &&
+  supabaseAnonKey.length > 20
+)
+
+// Use placeholder values if not configured to prevent errors
+const finalUrl = hasValidCredentials ? supabaseUrl : 'https://placeholder.supabase.co'
+const finalKey = hasValidCredentials ? supabaseAnonKey : 'placeholder-key'
 
 if (!hasValidCredentials) {
-  console.warn('Supabase not configured: Using placeholder values. Please set up your Supabase credentials in .env.local')
+  console.warn('Supabase not configured: Please set up your Supabase credentials in .env.local')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(finalUrl, finalKey, {
   auth: {
     autoRefreshToken: hasValidCredentials,
     persistSession: hasValidCredentials,
