@@ -124,7 +124,6 @@ export const authService = {
     try {
       // Check if Supabase is configured
       if (!isSupabaseConfigured()) {
-        console.error('Supabase not configured')
         return null
       }
 
