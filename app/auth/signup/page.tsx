@@ -10,10 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, MapPin, Phone, AlertCircle, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, MapPin, Phone, AlertCircle, CheckCircle, Brain } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { authService } from '@/lib/auth';
+import { drunkSafeService } from '@/lib/drunksafe';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function SignupPage() {
@@ -37,7 +38,11 @@ export default function SignupPage() {
     phone: '',
     address: '',
     capacity: '',
-    description: ''
+    description: '',
+    // DrunkSafe profile data
+    weight_kg: 70,
+    gender: 'male' as 'male' | 'female' | 'other',
+    tolerance_level: 'moderate' as 'low' | 'moderate' | 'high'
   });
   const router = useRouter();
 
@@ -126,7 +131,24 @@ export default function SignupPage() {
         })
       };
 
-      await authService.signUp(formData.email, formData.password, userData);
+      const authResult = await authService.signUp(formData.email, formData.password, userData);
+      
+      // For customers, also create DrunkSafe tolerance profile
+      if (userType === 'customer' && authResult.user) {
+        try {
+          const thresholds = drunkSafeService.getDefaultThresholds(formData.tolerance_level);
+          await drunkSafeService.createToleranceProfile({
+            user_id: authResult.user.id,
+            weight_kg: formData.weight_kg,
+            gender: formData.gender,
+            tolerance_level: formData.tolerance_level,
+            ...thresholds
+          });
+        } catch (profileError) {
+          console.warn('Failed to create DrunkSafe profile:', profileError);
+          // Don't fail the signup if profile creation fails
+        }
+      }
       
       // Redirect based on user type
       const redirectPath = userType === 'business' ? '/dashboard' : '/explore';
@@ -229,6 +251,8 @@ export default function SignupPage() {
     );
   }
 
+  const totalSteps = userType === 'business' ? 3 : (userType === 'customer' ? 3 : 2);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Background Image */}
@@ -264,7 +288,7 @@ export default function SignupPage() {
             <CardHeader className="text-center">
               <CardTitle className="text-foreground">Create Account</CardTitle>
               <CardDescription className="text-muted-foreground">
-                Step {step} of {userType === 'business' ? '3' : '2'}
+                Step {step} of {totalSteps}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -494,9 +518,88 @@ export default function SignupPage() {
                         Back
                       </Button>
                       <Button 
+                        type="button" 
+                        onClick={nextStep}
+                        className="flex-1 glass glow-green hover-lift"
+                        disabled={isUnderAge()}
+                      >
+                        Continue
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                {step === 3 && userType === 'customer' && (
+                  <>
+                    <div className="mb-4 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                      <div className="flex items-center space-x-2 text-purple-400 mb-2">
+                        <Brain className="h-4 w-4" />
+                        <span className="font-medium">DrunkSafe™ Profile Setup</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Help us personalize your safety experience with accurate BAC calculations
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="weight" className="text-foreground">Weight (kg)</Label>
+                        <Input
+                          id="weight"
+                          type="number"
+                          placeholder="70"
+                          value={formData.weight_kg}
+                          onChange={(e) => setFormData({ ...formData, weight_kg: Number(e.target.value) })}
+                          className="glass border-border/50"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gender" className="text-foreground">Gender</Label>
+                        <Select value={formData.gender} onValueChange={(value: any) => setFormData({ ...formData, gender: value })}>
+                          <SelectTrigger className="glass border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tolerance" className="text-foreground">Drinking Tolerance</Label>
+                      <Select value={formData.tolerance_level} onValueChange={(value: any) => setFormData({ ...formData, tolerance_level: value })}>
+                        <SelectTrigger className="glass border-border/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low Tolerance</SelectItem>
+                          <SelectItem value="moderate">Moderate Tolerance</SelectItem>
+                          <SelectItem value="high">High Tolerance</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        This helps us set appropriate safety thresholds for your BAC monitoring
+                      </p>
+                    </div>
+
+                    <div className="flex space-x-3">
+                      <Button 
+                        type="button" 
+                        onClick={prevStep}
+                        variant="outline"
+                        className="flex-1 glass border-border/50"
+                      >
+                        Back
+                      </Button>
+                      <Button 
                         type="submit" 
                         className="flex-1 glass glow-green hover-lift"
-                        disabled={isLoading || isUnderAge()}
+                        disabled={isLoading}
                       >
                         {isLoading ? (
                           <div className="flex items-center space-x-2">
