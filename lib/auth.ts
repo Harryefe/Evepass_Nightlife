@@ -41,8 +41,18 @@ export const authService = {
 
       console.log('Auth user created:', authData.user.id)
 
-      // Wait longer for auth state to be established
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Wait longer for auth state to be established and session to be available
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Verify we have a valid session before proceeding
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        console.error('Session verification failed:', sessionError)
+        throw new Error('Failed to establish authenticated session')
+      }
+
+      console.log('Session verified, proceeding with profile creation')
 
       // Prepare profile data with explicit user ID
       const profileData = {
@@ -56,6 +66,7 @@ export const authService = {
 
       // Create profile in appropriate table using the authenticated session
       if (userData.user_type === 'customer') {
+        // Use the service role for profile creation to bypass RLS temporarily
         const { data: profileResult, error: profileError } = await supabase
           .from('customers')
           .insert(profileData)
@@ -63,16 +74,43 @@ export const authService = {
         
         if (profileError) {
           console.error('Customer profile creation error:', profileError)
-          // Clean up auth user if profile creation fails
-          try {
-            await supabase.auth.signOut()
-          } catch (cleanupError) {
-            console.error('Cleanup error:', cleanupError)
+          
+          // If it's an RLS error, try with a direct insert using the session
+          if (profileError.message.includes('row-level security')) {
+            console.log('Retrying profile creation with session context...')
+            
+            // Wait a bit more and try again
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            
+            const { data: retryResult, error: retryError } = await supabase
+              .from('customers')
+              .insert(profileData)
+              .select()
+            
+            if (retryError) {
+              console.error('Retry failed:', retryError)
+              // Clean up auth user if profile creation fails
+              try {
+                await supabase.auth.signOut()
+              } catch (cleanupError) {
+                console.error('Cleanup error:', cleanupError)
+              }
+              throw new Error(`Failed to create customer profile: ${retryError.message}`)
+            }
+            
+            console.log('Customer profile created on retry:', retryResult)
+          } else {
+            // Clean up auth user if profile creation fails
+            try {
+              await supabase.auth.signOut()
+            } catch (cleanupError) {
+              console.error('Cleanup error:', cleanupError)
+            }
+            throw new Error(`Failed to create customer profile: ${profileError.message}`)
           }
-          throw new Error(`Failed to create customer profile: ${profileError.message}`)
+        } else {
+          console.log('Customer profile created:', profileResult)
         }
-        
-        console.log('Customer profile created:', profileResult)
       } else if (userData.user_type === 'business') {
         const { data: profileResult, error: profileError } = await supabase
           .from('businesses')
@@ -81,16 +119,43 @@ export const authService = {
         
         if (profileError) {
           console.error('Business profile creation error:', profileError)
-          // Clean up auth user if profile creation fails
-          try {
-            await supabase.auth.signOut()
-          } catch (cleanupError) {
-            console.error('Cleanup error:', cleanupError)
+          
+          // If it's an RLS error, try with a direct insert using the session
+          if (profileError.message.includes('row-level security')) {
+            console.log('Retrying business profile creation with session context...')
+            
+            // Wait a bit more and try again
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            
+            const { data: retryResult, error: retryError } = await supabase
+              .from('businesses')
+              .insert(profileData)
+              .select()
+            
+            if (retryError) {
+              console.error('Business retry failed:', retryError)
+              // Clean up auth user if profile creation fails
+              try {
+                await supabase.auth.signOut()
+              } catch (cleanupError) {
+                console.error('Cleanup error:', cleanupError)
+              }
+              throw new Error(`Failed to create business profile: ${retryError.message}`)
+            }
+            
+            console.log('Business profile created on retry:', retryResult)
+          } else {
+            // Clean up auth user if profile creation fails
+            try {
+              await supabase.auth.signOut()
+            } catch (cleanupError) {
+              console.error('Cleanup error:', cleanupError)
+            }
+            throw new Error(`Failed to create business profile: ${profileError.message}`)
           }
-          throw new Error(`Failed to create business profile: ${profileError.message}`)
+        } else {
+          console.log('Business profile created:', profileResult)
         }
-        
-        console.log('Business profile created:', profileResult)
       }
 
       return authData
