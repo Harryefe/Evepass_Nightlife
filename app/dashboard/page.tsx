@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,13 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { AuthGuard } from '@/components/auth/auth-guard';
+import { socialService, SongRequest } from '@/lib/social';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Area, AreaChart
 } from 'recharts';
 import { 
   TrendingUp, Users, Calendar, MessageSquare, Star, Settings, 
-  Upload, MapPin, Clock, DollarSign, Eye, Heart, Phone, ShoppingCart, QrCode, LogOut
+  Upload, MapPin, Clock, DollarSign, Eye, Heart, Phone, ShoppingCart, QrCode, LogOut,
+  Music, CheckCircle, XCircle, Wine, Share2
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -52,7 +54,92 @@ const trafficData = [
 
 function BusinessDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [songRequests, setSongRequests] = useState<SongRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    initializeDashboard();
+    
+    // Set up real-time subscription for song requests
+    const setupSubscription = async () => {
+      const user = await authService.getCurrentUser();
+      if (user && user.user_type === 'business') {
+        const subscription = socialService.subscribeToVenueSongRequests(
+          user.id,
+          (payload) => {
+            console.log('Song request update:', payload);
+            loadSongRequests();
+          }
+        );
+        
+        return () => subscription.unsubscribe();
+      }
+    };
+    
+    setupSubscription();
+  }, []);
+
+  const initializeDashboard = async () => {
+    try {
+      setLoading(true);
+      const user = await authService.getCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+        if (user.user_type === 'business') {
+          await loadSongRequests();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize dashboard:', error);
+      Sentry.captureException(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSongRequests = async () => {
+    try {
+      const user = await authService.getCurrentUser();
+      if (user && user.user_type === 'business') {
+        const requests = await socialService.getVenueSongRequests(user.id);
+        setSongRequests(requests);
+      }
+    } catch (error) {
+      console.error('Failed to load song requests:', error);
+      Sentry.captureException(error);
+    }
+  };
+
+  const handleSongRequestAction = async (requestId: string, action: 'approved' | 'denied', reason?: string) => {
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Handle Song Request",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("request_id", requestId);
+          span.setAttribute("action", action);
+
+          const result = await socialService.updateSongRequestStatus(requestId, action, reason);
+          
+          if (result.success) {
+            await loadSongRequests();
+          } else {
+            alert(result.message);
+          }
+          
+          span.setAttribute("action_success", result.success);
+        } catch (error) {
+          console.error('Failed to update song request:', error);
+          Sentry.captureException(error);
+          span.setAttribute("action_success", false);
+        }
+      }
+    );
+  };
 
   const handleSignOut = async () => {
     return Sentry.startSpan(
@@ -73,6 +160,8 @@ function BusinessDashboard() {
       }
     );
   };
+
+  const pendingSongRequests = songRequests.filter(req => req.status === 'pending');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
@@ -95,6 +184,11 @@ function BusinessDashboard() {
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Messages (0)
               </Button>
+              {pendingSongRequests.length > 0 && (
+                <Badge className="bg-pink-600 text-white">
+                  {pendingSongRequests.length} Song Requests
+                </Badge>
+              )}
               <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
@@ -213,10 +307,10 @@ function BusinessDashboard() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-400">Favorites</p>
-                    <p className="text-2xl font-bold text-yellow-400">0</p>
+                    <p className="text-sm text-gray-400">Song Requests</p>
+                    <p className="text-2xl font-bold text-pink-400">{pendingSongRequests.length}</p>
                   </div>
-                  <Heart className="h-8 w-8 text-yellow-400" />
+                  <Music className="h-8 w-8 text-pink-400" />
                 </div>
               </CardContent>
             </Card>
@@ -224,11 +318,12 @@ function BusinessDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 bg-white/5 border border-purple-500/20">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 bg-white/5 border border-purple-500/20">
             <TabsTrigger value="overview" className="data-[state=active]:bg-purple-600">Overview</TabsTrigger>
             <TabsTrigger value="orders" className="data-[state=active]:bg-blue-600">Orders</TabsTrigger>
             <TabsTrigger value="menu" className="data-[state=active]:bg-green-600">Menu</TabsTrigger>
             <TabsTrigger value="bookings" className="data-[state=active]:bg-purple-600">Bookings</TabsTrigger>
+            <TabsTrigger value="social" className="data-[state=active]:bg-pink-600">Social</TabsTrigger>
             <TabsTrigger value="profile" className="data-[state=active]:bg-purple-600">Profile</TabsTrigger>
             <TabsTrigger value="analytics" className="data-[state=active]:bg-purple-600">Analytics</TabsTrigger>
           </TabsList>
@@ -327,6 +422,154 @@ function BusinessDashboard() {
                     <Button size="sm" variant="outline" className="border-green-500 text-green-400">
                       Setup Tables
                     </Button>
+                  </div>
+                  <div className="flex items-center space-x-4 p-3 rounded-lg bg-white/5">
+                    <div className="w-8 h-8 bg-pink-600 rounded-full flex items-center justify-center text-white font-bold">4</div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm font-medium">Enable social features</p>
+                      <p className="text-gray-400 text-xs">Allow bottle sharing and song requests</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="border-pink-500 text-pink-400">
+                      Enable Social
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="social" className="space-y-6">
+            <Card className="bg-white/5 border-pink-500/20">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white flex items-center">
+                      <Music className="h-5 w-5 mr-2 text-pink-400" />
+                      Song Requests
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Manage real-time song requests from customers
+                    </CardDescription>
+                  </div>
+                  <Badge className="bg-pink-600 text-white">
+                    {pendingSongRequests.length} Pending
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {songRequests.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Music className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-medium text-white mb-2">No Song Requests Yet</h3>
+                    <p className="text-gray-400 mb-4">
+                      Song requests from customers will appear here in real-time
+                    </p>
+                    <div className="p-4 bg-pink-500/20 rounded-lg border border-pink-500/30 max-w-md mx-auto">
+                      <p className="text-pink-300 text-sm">
+                        💡 Tip: Customers can request songs from your venue profile page when you enable social features
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {songRequests.map((request) => (
+                      <Card key={request.id} className="bg-white/10 border-purple-500/30">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Music className="h-4 w-4 text-pink-400" />
+                                <h4 className="text-white font-medium">{request.song_title}</h4>
+                                {request.status === 'pending' && (
+                                  <Badge className="bg-yellow-600 text-white text-xs">
+                                    New
+                                  </Badge>
+                                )}
+                              </div>
+                              {request.artist_name && (
+                                <p className="text-sm text-gray-400 mb-1">by {request.artist_name}</p>
+                              )}
+                              <p className="text-xs text-gray-500">
+                                Requested by {(request as any).customers?.first_name} {(request as any).customers?.last_name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(request.requested_at).toLocaleString()}
+                              </p>
+                              {request.denial_reason && (
+                                <p className="text-sm text-red-400 mt-2">
+                                  Denied: {request.denial_reason}
+                                </p>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center space-x-2">
+                              {request.status === 'pending' ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleSongRequestAction(request.id, 'approved')}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const reason = prompt('Reason for denial (optional):');
+                                      handleSongRequestAction(request.id, 'denied', reason || undefined);
+                                    }}
+                                    className="border-red-500 text-red-400 hover:bg-red-500/20"
+                                  >
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                    Deny
+                                  </Button>
+                                </>
+                              ) : (
+                                <Badge className={`${
+                                  request.status === 'approved' 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-red-600 text-white'
+                                }`}>
+                                  {request.status === 'approved' ? (
+                                    <><CheckCircle className="h-3 w-3 mr-1" /> Approved</>
+                                  ) : (
+                                    <><XCircle className="h-3 w-3 mr-1" /> Denied</>
+                                  )}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/5 border-purple-500/20">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <Wine className="h-5 w-5 mr-2 text-purple-400" />
+                  Bottle Shares
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Monitor bottle sharing activity at your venue
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Wine className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2">No Active Bottle Shares</h3>
+                  <p className="text-gray-400 mb-4">
+                    Bottle sharing requests will appear here when customers create them
+                  </p>
+                  <div className="p-4 bg-purple-500/20 rounded-lg border border-purple-500/30 max-w-md mx-auto">
+                    <p className="text-purple-300 text-sm">
+                      💡 Tip: Customers can create bottle shares to split costs and meet new people at your venue
+                    </p>
                   </div>
                 </div>
               </CardContent>

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { MapPin, Clock, Users, Star, Heart, Filter, Search, Calendar, Navigation, Bot, ShoppingCart, LogOut } from 'lucide-react';
+import { MapPin, Clock, Users, Star, Heart, Filter, Search, Calendar, Navigation, Bot, ShoppingCart, LogOut, Wine, Music, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { authService } from '@/lib/auth';
@@ -33,6 +33,7 @@ interface Venue {
   bookingAvailable: boolean;
   popularWith: string;
   hasMenu: boolean;
+  hasSocialFeatures: boolean; // New field for social features
 }
 
 // Demo venues for fresh user experience
@@ -52,7 +53,8 @@ const mockVenues: Venue[] = [
     currentEvent: "Saturday Night Sessions",
     bookingAvailable: true,
     popularWith: "25-35 age group",
-    hasMenu: true
+    hasMenu: true,
+    hasSocialFeatures: true
   },
   {
     id: 2,
@@ -69,7 +71,8 @@ const mockVenues: Venue[] = [
     currentEvent: "House Nation",
     bookingAvailable: true,
     popularWith: "22-30 age group",
-    hasMenu: true
+    hasMenu: true,
+    hasSocialFeatures: true
   },
   {
     id: 3,
@@ -86,7 +89,8 @@ const mockVenues: Venue[] = [
     currentEvent: "Friday Jazz Night",
     bookingAvailable: true,
     popularWith: "28-40 age group",
-    hasMenu: true
+    hasMenu: true,
+    hasSocialFeatures: true
   },
   {
     id: 4,
@@ -103,7 +107,8 @@ const mockVenues: Venue[] = [
     currentEvent: "Underground Sessions",
     bookingAvailable: false,
     popularWith: "20-32 age group",
-    hasMenu: false
+    hasMenu: false,
+    hasSocialFeatures: false
   },
   {
     id: 5,
@@ -120,7 +125,8 @@ const mockVenues: Venue[] = [
     currentEvent: "Indie Rock Night",
     bookingAvailable: true,
     popularWith: "23-35 age group",
-    hasMenu: true
+    hasMenu: true,
+    hasSocialFeatures: true
   },
   {
     id: 6,
@@ -137,7 +143,8 @@ const mockVenues: Venue[] = [
     currentEvent: "Sunset Sessions",
     bookingAvailable: true,
     popularWith: "25-40 age group",
-    hasMenu: true
+    hasMenu: true,
+    hasSocialFeatures: true
   }
 ];
 
@@ -234,6 +241,12 @@ function ExplorePage() {
                 <Navigation className="h-4 w-4 mr-2" />
                 {currentLocation}
               </Button>
+              <Link href="/social">
+                <Button variant="outline" size="sm" className="glass glow-purple">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Social Hub
+                </Button>
+              </Link>
               <Link href="/ai-assistant">
                 <Button variant="outline" size="sm" className="glass glow-blue">
                   <Bot className="h-4 w-4 mr-2" />
@@ -273,8 +286,14 @@ function ExplorePage() {
             Your nightlife journey starts here!
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/ai-assistant">
+            <Link href="/social">
               <Button className="bg-purple-600 hover:bg-purple-700">
+                <Share2 className="h-4 w-4 mr-2" />
+                Explore Social Features
+              </Button>
+            </Link>
+            <Link href="/ai-assistant">
+              <Button variant="outline" className="border-blue-500 text-blue-500">
                 <Bot className="h-4 w-4 mr-2" />
                 Chat with Eve AI
               </Button>
@@ -349,10 +368,15 @@ function ExplorePage() {
                     <Heart className={`h-4 w-4 ${favoriteVenues.has(venue.id) ? 'fill-current' : ''}`} />
                   </Button>
                 </div>
-                <div className="absolute bottom-3 left-3">
+                <div className="absolute bottom-3 left-3 flex space-x-2">
                   <Badge className={`${venue.bookingAvailable ? 'bg-green-500' : 'bg-red-500'} text-white`}>
                     {venue.bookingAvailable ? 'Available' : 'Sold Out'}
                   </Badge>
+                  {venue.hasSocialFeatures && (
+                    <Badge className="bg-purple-500 text-white">
+                      Social Features
+                    </Badge>
+                  )}
                 </div>
               </div>
               
@@ -439,6 +463,26 @@ function ExplorePage() {
                       Add to Plan
                     </Button>
                   </div>
+
+                  {/* Social Features Section */}
+                  {venue.hasSocialFeatures && (
+                    <div className="pt-2 border-t border-border/50">
+                      <div className="flex gap-2">
+                        <Link href="/social" className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full glass border-purple-500/50 text-purple-400 hover:bg-purple-500/20">
+                            <Wine className="h-3 w-3 mr-1" />
+                            Share Bottle
+                          </Button>
+                        </Link>
+                        <Link href="/social" className="flex-1">
+                          <Button size="sm" variant="outline" className="w-full glass border-pink-500/50 text-pink-400 hover:bg-pink-500/20">
+                            <Music className="h-3 w-3 mr-1" />
+                            Request Song
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
