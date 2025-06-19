@@ -1,5 +1,4 @@
 import { supabase, isSupabaseConfigured } from './supabase'
-import { logger, withSentryErrorHandling } from './sentry'
 
 export interface AuthUser {
   id: string
@@ -11,13 +10,13 @@ export interface AuthUser {
 export const authService = {
   // Sign up new user
   async signUp(email: string, password: string, userData: any) {
-    return withSentryErrorHandling(async () => {
+    try {
       // Check if Supabase is configured
       if (!isSupabaseConfigured()) {
         throw new Error('Database connection not configured. Please check your environment variables.');
       }
 
-      logger.info('Starting signup process', { email, userType: userData.user_type })
+      console.log('Starting signup process for:', email, 'Type:', userData.user_type)
       
       // First, sign up the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -32,7 +31,7 @@ export const authService = {
       })
 
       if (authError) {
-        logger.error('Auth signup failed', { error: authError.message, email })
+        console.error('Auth signup error:', authError)
         throw authError
       }
 
@@ -40,7 +39,7 @@ export const authService = {
         throw new Error('User creation failed - no user returned')
       }
 
-      logger.info('Auth user created successfully', { userId: authData.user.id })
+      console.log('Auth user created:', authData.user.id)
 
       // Wait for auth state to be established
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -53,7 +52,7 @@ export const authService = {
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
-          logger.error('Session check failed', { error: sessionError.message, attempt: sessionAttempts })
+          console.error('Session check error:', sessionError)
         }
         
         if (currentSession && currentSession.user.id === authData.user.id) {
@@ -62,7 +61,7 @@ export const authService = {
         }
         
         sessionAttempts++
-        logger.debug(`Session verification attempt ${sessionAttempts}/5`)
+        console.log(`Session attempt ${sessionAttempts}/5...`)
         await new Promise(resolve => setTimeout(resolve, 500))
       }
 
@@ -70,7 +69,7 @@ export const authService = {
         throw new Error('Failed to establish authenticated session after multiple attempts')
       }
 
-      logger.info('Session verified successfully, proceeding with profile creation')
+      console.log('Session verified successfully, proceeding with profile creation')
 
       // Prepare profile data with explicit user ID
       const profileData = {
@@ -79,6 +78,8 @@ export const authService = {
         user_type: userData.user_type,
         ...userData
       }
+
+      console.log('Creating profile with data:', profileData)
 
       // Create profile in appropriate table with retry logic
       let profileCreated = false
@@ -96,7 +97,7 @@ export const authService = {
               throw profileError
             }
             
-            logger.info('Customer profile created successfully', { userId: authData.user.id })
+            console.log('Customer profile created:', profileResult)
             profileCreated = true
           } else if (userData.user_type === 'business') {
             const { data: profileResult, error: profileError } = await supabase
@@ -108,23 +109,19 @@ export const authService = {
               throw profileError
             }
             
-            logger.info('Business profile created successfully', { userId: authData.user.id })
+            console.log('Business profile created:', profileResult)
             profileCreated = true
           }
         } catch (profileError: any) {
           profileAttempts++
-          logger.error(`Profile creation attempt ${profileAttempts}/3 failed`, {
-            error: profileError.message,
-            userId: authData.user.id,
-            userType: userData.user_type
-          })
+          console.error(`Profile creation attempt ${profileAttempts}/3 failed:`, profileError)
           
           if (profileAttempts >= 3) {
             // Clean up auth user if all profile creation attempts fail
             try {
               await supabase.auth.signOut()
             } catch (cleanupError) {
-              logger.error('Cleanup after profile creation failure failed', { error: cleanupError })
+              console.error('Cleanup error:', cleanupError)
             }
             throw new Error(`Failed to create ${userData.user_type} profile after ${profileAttempts} attempts: ${profileError.message}`)
           }
@@ -135,18 +132,21 @@ export const authService = {
       }
 
       return authData
-    }, 'User signup')
+    } catch (error) {
+      console.error('Complete signup error:', error)
+      throw error
+    }
   },
 
   // Sign in user
   async signIn(email: string, password: string) {
-    return withSentryErrorHandling(async () => {
+    try {
       // Check if Supabase is configured
       if (!isSupabaseConfigured()) {
         throw new Error('Database connection not configured. Please check your environment variables.');
       }
 
-      logger.info('Attempting user sign in', { email })
+      console.log('Attempting sign in for:', email)
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -154,7 +154,7 @@ export const authService = {
       })
 
       if (error) {
-        logger.error('Sign in failed', { error: error.message, email })
+        console.error('Sign in error:', error)
         throw error
       }
 
@@ -162,7 +162,7 @@ export const authService = {
         throw new Error('Sign in failed - no user returned')
       }
 
-      logger.info('Sign in successful', { userId: data.user.id })
+      console.log('Sign in successful for user:', data.user.id)
 
       // Verify session is established
       let sessionAttempts = 0
@@ -172,7 +172,7 @@ export const authService = {
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
-          logger.error('Session verification failed', { error: sessionError.message })
+          console.error('Session verification error:', sessionError)
         }
         
         if (currentSession && currentSession.user.id === data.user.id) {
@@ -189,30 +189,26 @@ export const authService = {
       }
 
       return data
-    }, 'User sign in')
+    } catch (error) {
+      console.error('Sign in failed:', error)
+      throw error
+    }
   },
 
   // Sign out user
   async signOut() {
-    return withSentryErrorHandling(async () => {
-      // Check if Supabase is configured
-      if (!isSupabaseConfigured()) {
-        throw new Error('Database connection not configured. Please check your environment variables.');
-      }
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured()) {
+      throw new Error('Database connection not configured. Please check your environment variables.');
+    }
 
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        logger.error('Sign out failed', { error: error.message })
-        throw error
-      }
-      
-      logger.info('User signed out successfully')
-    }, 'User sign out')
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
   },
 
   // Get current user with profile
   async getCurrentUser(): Promise<AuthUser | null> {
-    return withSentryErrorHandling(async () => {
+    try {
       // Check if Supabase is configured
       if (!isSupabaseConfigured()) {
         return null
@@ -232,7 +228,7 @@ export const authService = {
         .maybeSingle()
 
       if (error) {
-        logger.error('Profile fetch failed', { error: error.message, userId: user.id })
+        console.error('Profile fetch error:', error)
         // Return user with null profile if profile fetch fails
         return {
           id: user.id,
@@ -248,7 +244,10 @@ export const authService = {
         user_type: userType,
         profile
       }
-    }, 'Get current user')
+    } catch (error) {
+      console.error('Get current user error:', error)
+      return null
+    }
   },
 
   // Check if user is authenticated
@@ -262,7 +261,7 @@ export const authService = {
       const { data: { user } } = await supabase.auth.getUser()
       return !!user
     } catch (error) {
-      logger.error('Auth check failed', { error })
+      console.error('Auth check error:', error)
       return false
     }
   }

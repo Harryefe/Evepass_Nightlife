@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { logger, withSentryErrorHandling } from './sentry'
 
 export interface UserToleranceProfile {
   id: string
@@ -75,49 +74,28 @@ export const COMMON_DRINKS: Record<string, DrinkData> = {
 export const drunkSafeService = {
   // Create or update user tolerance profile
   async createToleranceProfile(profileData: Partial<UserToleranceProfile>) {
-    return withSentryErrorHandling(async () => {
-      logger.info('Creating tolerance profile', { userId: profileData.user_id })
-      
-      const { data, error } = await supabase
-        .from('user_tolerance_profiles')
-        .upsert(profileData)
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('user_tolerance_profiles')
+      .upsert(profileData)
+      .select()
+      .single()
 
-      if (error) {
-        logger.error('Failed to create tolerance profile', { 
-          error: error.message, 
-          userId: profileData.user_id 
-        })
-        throw error
-      }
-      
-      logger.info('Tolerance profile created successfully', { 
-        userId: profileData.user_id,
-        toleranceLevel: profileData.tolerance_level 
-      })
-      return data
-    }, 'Create tolerance profile')
+    if (error) throw error
+    return data
   },
 
   // Get user's tolerance profile
   async getUserToleranceProfile(userId: string): Promise<UserToleranceProfile | null> {
-    return withSentryErrorHandling(async () => {
-      const { data, error } = await supabase
-        .from('user_tolerance_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+    const { data, error } = await supabase
+      .from('user_tolerance_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-      if (error) {
-        logger.error('Failed to fetch tolerance profile', { error: error.message, userId })
-        throw error
-      }
-      
-      return data
-    }, 'Get tolerance profile')
+    if (error) throw error
+    return data
   },
 
   // Get default thresholds based on tolerance level
@@ -140,114 +118,66 @@ export const drunkSafeService = {
     menu_item_id?: string
     food_consumed_recently?: boolean
   }) {
-    return withSentryErrorHandling(async () => {
-      logger.info('Logging drink consumption', { 
-        userId: drinkData.user_id,
-        drinkName: drinkData.drink_name,
-        volume: drinkData.volume_ml,
-        abv: drinkData.abv_percentage
+    const { data, error } = await supabase
+      .from('drink_consumption_log')
+      .insert({
+        ...drinkData,
+        consumed_at: new Date().toISOString()
       })
-      
-      const { data, error } = await supabase
-        .from('drink_consumption_log')
-        .insert({
-          ...drinkData,
-          consumed_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+      .select()
+      .single()
 
-      if (error) {
-        logger.error('Failed to log drink consumption', { 
-          error: error.message, 
-          userId: drinkData.user_id 
-        })
-        throw error
-      }
-      
-      logger.info('Drink consumption logged successfully', { 
-        userId: drinkData.user_id,
-        drinkId: data.id
-      })
-      return data
-    }, 'Log drink consumption')
+    if (error) throw error
+    return data
   },
 
   // Get user's drink consumption history
   async getDrinkHistory(userId: string, hoursBack: number = 12) {
-    return withSentryErrorHandling(async () => {
-      const cutoffTime = new Date()
-      cutoffTime.setHours(cutoffTime.getHours() - hoursBack)
+    const cutoffTime = new Date()
+    cutoffTime.setHours(cutoffTime.getHours() - hoursBack)
 
-      const { data, error } = await supabase
-        .from('drink_consumption_log')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('consumed_at', cutoffTime.toISOString())
-        .order('consumed_at', { ascending: false })
+    const { data, error } = await supabase
+      .from('drink_consumption_log')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('consumed_at', cutoffTime.toISOString())
+      .order('consumed_at', { ascending: false })
 
-      if (error) {
-        logger.error('Failed to fetch drink history', { error: error.message, userId })
-        throw error
-      }
-      
-      return data || []
-    }, 'Get drink history')
+    if (error) throw error
+    return data || []
   },
 
   // Calculate current BAC using the database function
   async calculateCurrentBAC(userId: string): Promise<BACCalculation> {
-    return withSentryErrorHandling(async () => {
-      logger.debug('Calculating current BAC', { userId })
-      
-      const { data, error } = await supabase
-        .rpc('calculate_user_bac', { user_uuid: userId })
+    const { data, error } = await supabase
+      .rpc('calculate_user_bac', { user_uuid: userId })
 
-      if (error) {
-        logger.error('BAC calculation failed', { error: error.message, userId })
-        throw error
+    if (error) throw error
+    
+    if (!data || data.length === 0) {
+      return {
+        current_bac: 0,
+        safety_state: 'safe',
+        drinks_consumed: 0,
+        time_since_first_drink: 0,
+        recommendation: 'No recent drinking detected'
       }
-      
-      if (!data || data.length === 0) {
-        logger.info('No BAC data available for user', { userId })
-        return {
-          current_bac: 0,
-          safety_state: 'safe',
-          drinks_consumed: 0,
-          time_since_first_drink: 0,
-          recommendation: 'No recent drinking detected'
-        }
-      }
+    }
 
-      const result = data[0]
-      logger.info('BAC calculated successfully', { 
-        userId, 
-        bac: result.current_bac,
-        safetyState: result.safety_state,
-        drinksConsumed: result.drinks_consumed
-      })
-      
-      return result
-    }, 'Calculate BAC')
+    return data[0]
   },
 
   // Get BAC calculation history
   async getBACHistory(userId: string, limit: number = 50) {
-    return withSentryErrorHandling(async () => {
-      const { data, error } = await supabase
-        .from('bac_calculations')
-        .select('*')
-        .eq('user_id', userId)
-        .order('calculation_timestamp', { ascending: false })
-        .limit(limit)
+    const { data, error } = await supabase
+      .from('bac_calculations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('calculation_timestamp', { ascending: false })
+      .limit(limit)
 
-      if (error) {
-        logger.error('Failed to fetch BAC history', { error: error.message, userId })
-        throw error
-      }
-      
-      return data || []
-    }, 'Get BAC history')
+    if (error) throw error
+    return data || []
   },
 
   // Detect drink from menu item name and auto-populate data
@@ -284,110 +214,89 @@ export const drunkSafeService = {
 
   // Process order completion and auto-log drinks
   async processOrderForDrinks(orderId: string) {
-    return withSentryErrorHandling(async () => {
-      logger.info('Processing order for drink logging', { orderId })
-      
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .select(`
+    // This would typically be called by a webhook or trigger
+    // For now, it's a manual process that can be called from the frontend
+    
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
           *,
-          order_items (
-            *,
-            menu_items (*)
-          )
-        `)
-        .eq('id', orderId)
-        .single()
+          menu_items (*)
+        )
+      `)
+      .eq('id', orderId)
+      .single()
 
-      if (orderError) {
-        logger.error('Failed to fetch order for drink processing', { 
-          error: orderError.message, 
-          orderId 
-        })
-        throw orderError
-      }
+    if (orderError) throw orderError
 
-      if (!order || order.payment_status !== 'completed') {
-        return { message: 'Order not found or not completed' }
-      }
+    if (!order || order.payment_status !== 'completed') {
+      return { message: 'Order not found or not completed' }
+    }
 
-      // Check for recent food orders
-      const recentFoodOrder = await this.checkRecentFoodConsumption(order.customer_id)
+    // Check for recent food orders
+    const recentFoodOrder = await this.checkRecentFoodConsumption(order.customer_id)
 
-      // Process each alcoholic item in the order
-      const drinkLogs = []
-      for (const orderItem of order.order_items || []) {
-        const menuItem = orderItem.menu_items
+    // Process each alcoholic item in the order
+    const drinkLogs = []
+    for (const orderItem of order.order_items || []) {
+      const menuItem = orderItem.menu_items
+      
+      if (menuItem && ['cocktails', 'spirits', 'beer', 'wine'].includes(menuItem.category)) {
+        const drinkData = this.detectDrinkData(menuItem.name, menuItem.description)
         
-        if (menuItem && ['cocktails', 'spirits', 'beer', 'wine'].includes(menuItem.category)) {
-          const drinkData = this.detectDrinkData(menuItem.name, menuItem.description)
-          
-          if (drinkData) {
-            for (let i = 0; i < orderItem.quantity; i++) {
-              const logEntry = await this.logDrinkConsumption({
-                user_id: order.customer_id,
-                order_id: orderId,
-                menu_item_id: menuItem.id,
-                drink_name: menuItem.name,
-                volume_ml: drinkData.volume_ml,
-                abv_percentage: drinkData.abv_percentage,
-                food_consumed_recently: recentFoodOrder.hasRecentFood,
-              })
-              drinkLogs.push(logEntry)
-            }
+        if (drinkData) {
+          for (let i = 0; i < orderItem.quantity; i++) {
+            const logEntry = await this.logDrinkConsumption({
+              user_id: order.customer_id,
+              order_id: orderId,
+              menu_item_id: menuItem.id,
+              drink_name: menuItem.name,
+              volume_ml: drinkData.volume_ml,
+              abv_percentage: drinkData.abv_percentage,
+              food_consumed_recently: recentFoodOrder.hasRecentFood,
+            })
+            drinkLogs.push(logEntry)
           }
         }
       }
+    }
 
-      logger.info('Order processed for drinks', { 
-        orderId, 
-        drinksLogged: drinkLogs.length,
-        customerId: order.customer_id
-      })
-      
-      return { drinkLogs, recentFood: recentFoodOrder }
-    }, 'Process order for drinks')
+    return { drinkLogs, recentFood: recentFoodOrder }
   },
 
   // Check if user has consumed food recently
   async checkRecentFoodConsumption(userId: string, minutesBack: number = 90) {
-    return withSentryErrorHandling(async () => {
-      const cutoffTime = new Date()
-      cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesBack)
+    const cutoffTime = new Date()
+    cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesBack)
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
           *,
-          order_items (
-            *,
-            menu_items (category)
-          )
-        `)
-        .eq('customer_id', userId)
-        .eq('payment_status', 'completed')
-        .gte('created_at', cutoffTime.toISOString())
-
-      if (error) {
-        logger.error('Failed to check recent food consumption', { 
-          error: error.message, 
-          userId 
-        })
-        throw error
-      }
-
-      const hasRecentFood = (data || []).some(order => 
-        order.order_items?.some((item: any) => 
-          item.menu_items?.category === 'food'
+          menu_items (category)
         )
-      )
+      `)
+      .eq('customer_id', userId)
+      .eq('payment_status', 'completed')
+      .gte('created_at', cutoffTime.toISOString())
 
-      return {
-        hasRecentFood,
-        minutesBack,
-        ordersChecked: data?.length || 0
-      }
-    }, 'Check recent food consumption')
+    if (error) throw error
+
+    const hasRecentFood = (data || []).some(order => 
+      order.order_items?.some((item: any) => 
+        item.menu_items?.category === 'food'
+      )
+    )
+
+    return {
+      hasRecentFood,
+      minutesBack,
+      ordersChecked: data?.length || 0
+    }
   },
 
   // Get safety recommendations based on current state
