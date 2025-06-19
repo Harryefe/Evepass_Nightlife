@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
+import './lib/sentry'; // Initialize Sentry
 
 const inter = Inter({ subsets: ['latin'] });
 
