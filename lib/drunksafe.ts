@@ -87,7 +87,7 @@ export const drunkSafeService = {
 
           const { data, error } = await supabase
             .from('user_tolerance_profiles')
-            .upsert(profileData)
+            .upsert(profileData, { onConflict: 'user_id' })
             .select()
             .single()
 
