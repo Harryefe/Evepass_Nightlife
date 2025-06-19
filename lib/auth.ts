@@ -41,8 +41,18 @@ export const authService = {
 
       console.log('Auth user created:', authData.user.id)
 
-      // Wait for auth state to be established
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Wait for auth state to be established and get a fresh session
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // Get the current session to ensure we're authenticated
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        console.error('Session error:', sessionError)
+        throw new Error('Failed to establish authenticated session')
+      }
+
+      console.log('Session established for user:', session.user.id)
 
       // Prepare profile data with explicit user ID
       const profileData = {
@@ -54,7 +64,7 @@ export const authService = {
 
       console.log('Creating profile with data:', profileData)
 
-      // Create profile in appropriate table
+      // Create profile in appropriate table using the authenticated session
       if (userData.user_type === 'customer') {
         const { data: profileResult, error: profileError } = await supabase
           .from('customers')
@@ -64,7 +74,11 @@ export const authService = {
         if (profileError) {
           console.error('Customer profile creation error:', profileError)
           // Clean up auth user if profile creation fails
-          await supabase.auth.admin.deleteUser(authData.user.id)
+          try {
+            await supabase.auth.signOut()
+          } catch (cleanupError) {
+            console.error('Cleanup error:', cleanupError)
+          }
           throw new Error(`Failed to create customer profile: ${profileError.message}`)
         }
         
@@ -78,7 +92,11 @@ export const authService = {
         if (profileError) {
           console.error('Business profile creation error:', profileError)
           // Clean up auth user if profile creation fails
-          await supabase.auth.admin.deleteUser(authData.user.id)
+          try {
+            await supabase.auth.signOut()
+          } catch (cleanupError) {
+            console.error('Cleanup error:', cleanupError)
+          }
           throw new Error(`Failed to create business profile: ${profileError.message}`)
         }
         
