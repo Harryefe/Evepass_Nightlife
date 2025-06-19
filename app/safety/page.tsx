@@ -34,6 +34,7 @@ function SafetyPage() {
   const [emergencyPressed, setEmergencyPressed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Profile setup state
   const [profileForm, setProfileForm] = useState({
@@ -122,6 +123,8 @@ function SafetyPage() {
     if (!currentUser) return;
     
     try {
+      setProfileSaving(true);
+      
       const thresholds = profileForm.tolerance_level === 'custom' 
         ? {
             safe_threshold: profileForm.safe_threshold,
@@ -135,18 +138,32 @@ function SafetyPage() {
         weight_kg: profileForm.weight_kg,
         gender: profileForm.gender,
         tolerance_level: profileForm.tolerance_level,
-        ...thresholds
+        safe_threshold: thresholds.safe,
+        caution_threshold: thresholds.caution,
+        danger_threshold: thresholds.danger
       };
 
+      console.log('Saving profile data:', profileData);
+
       const savedProfile = await drunkSafeService.createToleranceProfile(profileData);
+      console.log('Profile saved successfully:', savedProfile);
+      
       setToleranceProfile(savedProfile);
       setShowProfileSetup(false);
       
       // Recalculate BAC with new profile
       await updateBACCalculation();
       
+      // Haptic feedback
+      if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
+      
     } catch (error) {
       console.error('Failed to save profile:', error);
+      alert('Failed to save profile. Please try again.');
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -279,7 +296,7 @@ function SafetyPage() {
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-lg bg-red-500/20 animate-pulse">
+              <div className="p-2 rounded-lg bg-red-500/20">
                 <Shield className="h-6 w-6 text-red-400" />
               </div>
               <div>
@@ -330,6 +347,8 @@ function SafetyPage() {
                     value={profileForm.weight_kg}
                     onChange={(e) => setProfileForm({...profileForm, weight_kg: Number(e.target.value)})}
                     className="bg-gray-800 border-gray-600 text-white"
+                    min="30"
+                    max="200"
                   />
                 </div>
 
@@ -414,14 +433,23 @@ function SafetyPage() {
                     variant="outline"
                     onClick={() => setShowProfileSetup(false)}
                     className="flex-1 border-gray-600 text-gray-300"
+                    disabled={profileSaving}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handleSaveProfile}
                     className="flex-1 bg-purple-600 hover:bg-purple-700"
+                    disabled={profileSaving || profileForm.weight_kg < 30 || profileForm.weight_kg > 200}
                   >
-                    Save Profile
+                    {profileSaving ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Saving...</span>
+                      </div>
+                    ) : (
+                      'Save Profile'
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -435,13 +463,13 @@ function SafetyPage() {
             <div className="text-center space-y-4">
               <h2 className="text-2xl font-bold text-red-400 mb-6">EMERGENCY ACTIONS</h2>
               
-              {/* 999 Emergency Button - Extra Prominent */}
+              {/* 999 Emergency Button - Removed animate-pulse */}
               <Button
                 onClick={handleEmergencyCall}
                 className={`w-full h-20 text-2xl font-bold transition-all duration-200 ${
                   emergencyPressed 
                     ? 'bg-red-600 scale-95' 
-                    : 'bg-red-500 hover:bg-red-600 animate-pulse'
+                    : 'bg-red-500 hover:bg-red-600'
                 } text-white shadow-lg shadow-red-500/50`}
               >
                 <Phone className="h-8 w-8 mr-3" />
