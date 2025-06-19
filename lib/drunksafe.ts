@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import * as Sentry from '@sentry/nextjs'
 
 export interface UserToleranceProfile {
   id: string
@@ -74,28 +75,70 @@ export const COMMON_DRINKS: Record<string, DrinkData> = {
 export const drunkSafeService = {
   // Create or update user tolerance profile
   async createToleranceProfile(profileData: Partial<UserToleranceProfile>) {
-    const { data, error } = await supabase
-      .from('user_tolerance_profiles')
-      .upsert(profileData)
-      .select()
-      .single()
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.createProfile",
+        name: "Create DrunkSafe Profile",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", profileData.user_id || "unknown");
+          span.setAttribute("tolerance_level", profileData.tolerance_level || "unknown");
 
-    if (error) throw error
-    return data
+          const { data, error } = await supabase
+            .from('user_tolerance_profiles')
+            .upsert(profileData)
+            .select()
+            .single()
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          span.setAttribute("profile_created", true);
+          return data
+        } catch (error) {
+          span.setAttribute("profile_created", false);
+          Sentry.captureException(error)
+          throw error
+        }
+      }
+    )
   },
 
   // Get user's tolerance profile
   async getUserToleranceProfile(userId: string): Promise<UserToleranceProfile | null> {
-    const { data, error } = await supabase
-      .from('user_tolerance_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.getProfile",
+        name: "Get DrunkSafe Profile",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", userId);
 
-    if (error) throw error
-    return data
+          const { data, error } = await supabase
+            .from('user_tolerance_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          span.setAttribute("profile_found", !!data);
+          return data
+        } catch (error) {
+          Sentry.captureException(error)
+          throw error
+        }
+      }
+    )
   },
 
   // Get default thresholds based on tolerance level
@@ -118,66 +161,158 @@ export const drunkSafeService = {
     menu_item_id?: string
     food_consumed_recently?: boolean
   }) {
-    const { data, error } = await supabase
-      .from('drink_consumption_log')
-      .insert({
-        ...drinkData,
-        consumed_at: new Date().toISOString()
-      })
-      .select()
-      .single()
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.logDrink",
+        name: "Log Drink Consumption",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", drinkData.user_id);
+          span.setAttribute("drink_name", drinkData.drink_name);
+          span.setAttribute("volume_ml", drinkData.volume_ml);
+          span.setAttribute("abv_percentage", drinkData.abv_percentage);
 
-    if (error) throw error
-    return data
+          const { data, error } = await supabase
+            .from('drink_consumption_log')
+            .insert({
+              ...drinkData,
+              consumed_at: new Date().toISOString()
+            })
+            .select()
+            .single()
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          span.setAttribute("drink_logged", true);
+          return data
+        } catch (error) {
+          span.setAttribute("drink_logged", false);
+          Sentry.captureException(error)
+          throw error
+        }
+      }
+    )
   },
 
   // Get user's drink consumption history
   async getDrinkHistory(userId: string, hoursBack: number = 12) {
-    const cutoffTime = new Date()
-    cutoffTime.setHours(cutoffTime.getHours() - hoursBack)
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.getDrinkHistory",
+        name: "Get Drink History",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", userId);
+          span.setAttribute("hours_back", hoursBack);
 
-    const { data, error } = await supabase
-      .from('drink_consumption_log')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('consumed_at', cutoffTime.toISOString())
-      .order('consumed_at', { ascending: false })
+          const cutoffTime = new Date()
+          cutoffTime.setHours(cutoffTime.getHours() - hoursBack)
 
-    if (error) throw error
-    return data || []
+          const { data, error } = await supabase
+            .from('drink_consumption_log')
+            .select('*')
+            .eq('user_id', userId)
+            .gte('consumed_at', cutoffTime.toISOString())
+            .order('consumed_at', { ascending: false })
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          span.setAttribute("drinks_found", data?.length || 0);
+          return data || []
+        } catch (error) {
+          Sentry.captureException(error)
+          throw error
+        }
+      }
+    )
   },
 
   // Calculate current BAC using the database function
   async calculateCurrentBAC(userId: string): Promise<BACCalculation> {
-    const { data, error } = await supabase
-      .rpc('calculate_user_bac', { user_uuid: userId })
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.calculateBAC",
+        name: "Calculate Current BAC",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", userId);
 
-    if (error) throw error
-    
-    if (!data || data.length === 0) {
-      return {
-        current_bac: 0,
-        safety_state: 'safe',
-        drinks_consumed: 0,
-        time_since_first_drink: 0,
-        recommendation: 'No recent drinking detected'
+          const { data, error } = await supabase
+            .rpc('calculate_user_bac', { user_uuid: userId })
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+          
+          if (!data || data.length === 0) {
+            span.setAttribute("bac_calculated", false);
+            return {
+              current_bac: 0,
+              safety_state: 'safe',
+              drinks_consumed: 0,
+              time_since_first_drink: 0,
+              recommendation: 'No recent drinking detected'
+            }
+          }
+
+          const result = data[0]
+          span.setAttribute("bac_calculated", true);
+          span.setAttribute("current_bac", result.current_bac);
+          span.setAttribute("safety_state", result.safety_state);
+          span.setAttribute("drinks_consumed", result.drinks_consumed);
+
+          return result
+        } catch (error) {
+          span.setAttribute("bac_calculated", false);
+          Sentry.captureException(error)
+          throw error
+        }
       }
-    }
-
-    return data[0]
+    )
   },
 
   // Get BAC calculation history
   async getBACHistory(userId: string, limit: number = 50) {
-    const { data, error } = await supabase
-      .from('bac_calculations')
-      .select('*')
-      .eq('user_id', userId)
-      .order('calculation_timestamp', { ascending: false })
-      .limit(limit)
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.getBACHistory",
+        name: "Get BAC History",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", userId);
+          span.setAttribute("limit", limit);
 
-    if (error) throw error
-    return data || []
+          const { data, error } = await supabase
+            .from('bac_calculations')
+            .select('*')
+            .eq('user_id', userId)
+            .order('calculation_timestamp', { ascending: false })
+            .limit(limit)
+
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          span.setAttribute("calculations_found", data?.length || 0);
+          return data || []
+        } catch (error) {
+          Sentry.captureException(error)
+          throw error
+        }
+      }
+    )
   },
 
   // Detect drink from menu item name and auto-populate data
@@ -214,89 +349,132 @@ export const drunkSafeService = {
 
   // Process order completion and auto-log drinks
   async processOrderForDrinks(orderId: string) {
-    // This would typically be called by a webhook or trigger
-    // For now, it's a manual process that can be called from the frontend
-    
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          *,
-          menu_items (*)
-        )
-      `)
-      .eq('id', orderId)
-      .single()
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.processOrder",
+        name: "Process Order for Drinks",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("order_id", orderId);
 
-    if (orderError) throw orderError
+          // This would typically be called by a webhook or trigger
+          // For now, it's a manual process that can be called from the frontend
+          
+          const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .select(`
+              *,
+              order_items (
+                *,
+                menu_items (*)
+              )
+            `)
+            .eq('id', orderId)
+            .single()
 
-    if (!order || order.payment_status !== 'completed') {
-      return { message: 'Order not found or not completed' }
-    }
-
-    // Check for recent food orders
-    const recentFoodOrder = await this.checkRecentFoodConsumption(order.customer_id)
-
-    // Process each alcoholic item in the order
-    const drinkLogs = []
-    for (const orderItem of order.order_items || []) {
-      const menuItem = orderItem.menu_items
-      
-      if (menuItem && ['cocktails', 'spirits', 'beer', 'wine'].includes(menuItem.category)) {
-        const drinkData = this.detectDrinkData(menuItem.name, menuItem.description)
-        
-        if (drinkData) {
-          for (let i = 0; i < orderItem.quantity; i++) {
-            const logEntry = await this.logDrinkConsumption({
-              user_id: order.customer_id,
-              order_id: orderId,
-              menu_item_id: menuItem.id,
-              drink_name: menuItem.name,
-              volume_ml: drinkData.volume_ml,
-              abv_percentage: drinkData.abv_percentage,
-              food_consumed_recently: recentFoodOrder.hasRecentFood,
-            })
-            drinkLogs.push(logEntry)
+          if (orderError) {
+            Sentry.captureException(orderError)
+            throw orderError
           }
+
+          if (!order || order.payment_status !== 'completed') {
+            return { message: 'Order not found or not completed' }
+          }
+
+          span.setAttribute("customer_id", order.customer_id);
+
+          // Check for recent food orders
+          const recentFoodOrder = await this.checkRecentFoodConsumption(order.customer_id)
+
+          // Process each alcoholic item in the order
+          const drinkLogs = []
+          for (const orderItem of order.order_items || []) {
+            const menuItem = orderItem.menu_items
+            
+            if (menuItem && ['cocktails', 'spirits', 'beer', 'wine'].includes(menuItem.category)) {
+              const drinkData = this.detectDrinkData(menuItem.name, menuItem.description)
+              
+              if (drinkData) {
+                for (let i = 0; i < orderItem.quantity; i++) {
+                  const logEntry = await this.logDrinkConsumption({
+                    user_id: order.customer_id,
+                    order_id: orderId,
+                    menu_item_id: menuItem.id,
+                    drink_name: menuItem.name,
+                    volume_ml: drinkData.volume_ml,
+                    abv_percentage: drinkData.abv_percentage,
+                    food_consumed_recently: recentFoodOrder.hasRecentFood,
+                  })
+                  drinkLogs.push(logEntry)
+                }
+              }
+            }
+          }
+
+          span.setAttribute("drinks_logged", drinkLogs.length);
+          return { drinkLogs, recentFood: recentFoodOrder }
+        } catch (error) {
+          Sentry.captureException(error)
+          throw error
         }
       }
-    }
-
-    return { drinkLogs, recentFood: recentFoodOrder }
+    )
   },
 
   // Check if user has consumed food recently
   async checkRecentFoodConsumption(userId: string, minutesBack: number = 90) {
-    const cutoffTime = new Date()
-    cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesBack)
+    return Sentry.startSpan(
+      {
+        op: "drunksafe.checkRecentFood",
+        name: "Check Recent Food Consumption",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", userId);
+          span.setAttribute("minutes_back", minutesBack);
 
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          *,
-          menu_items (category)
-        )
-      `)
-      .eq('customer_id', userId)
-      .eq('payment_status', 'completed')
-      .gte('created_at', cutoffTime.toISOString())
+          const cutoffTime = new Date()
+          cutoffTime.setMinutes(cutoffTime.getMinutes() - minutesBack)
 
-    if (error) throw error
+          const { data, error } = await supabase
+            .from('orders')
+            .select(`
+              *,
+              order_items (
+                *,
+                menu_items (category)
+              )
+            `)
+            .eq('customer_id', userId)
+            .eq('payment_status', 'completed')
+            .gte('created_at', cutoffTime.toISOString())
 
-    const hasRecentFood = (data || []).some(order => 
-      order.order_items?.some((item: any) => 
-        item.menu_items?.category === 'food'
-      )
+          if (error) {
+            Sentry.captureException(error)
+            throw error
+          }
+
+          const hasRecentFood = (data || []).some(order => 
+            order.order_items?.some((item: any) => 
+              item.menu_items?.category === 'food'
+            )
+          )
+
+          span.setAttribute("has_recent_food", hasRecentFood);
+          span.setAttribute("orders_checked", data?.length || 0);
+
+          return {
+            hasRecentFood,
+            minutesBack,
+            ordersChecked: data?.length || 0
+          }
+        } catch (error) {
+          Sentry.captureException(error)
+          throw error
+        }
+      }
     )
-
-    return {
-      hasRecentFood,
-      minutesBack,
-      ordersChecked: data?.length || 0
-    }
   },
 
   // Get safety recommendations based on current state

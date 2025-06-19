@@ -18,6 +18,7 @@ import {
   Clock, Home, User, Settings, TrendingUp, Activity, Brain
 } from 'lucide-react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 
 function SafetyPage() {
   // User and profile state
@@ -73,125 +74,182 @@ function SafetyPage() {
   }, [currentUser, toleranceProfile]);
 
   const initializeDrunkSafe = async () => {
-    try {
-      setLoading(true);
-      
-      // Get current user
-      const user = await authService.getCurrentUser();
-      if (!user) return;
-      
-      setCurrentUser(user);
-      
-      // Get tolerance profile
-      const profile = await drunkSafeService.getUserToleranceProfile(user.id);
-      setToleranceProfile(profile);
-      
-      if (profile) {
-        setProfileForm({
-          weight_kg: profile.weight_kg,
-          gender: profile.gender,
-          tolerance_level: profile.tolerance_level,
-          safe_threshold: profile.safe_threshold,
-          caution_threshold: profile.caution_threshold,
-          danger_threshold: profile.danger_threshold
-        });
+    return Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Initialize DrunkSafe",
+      },
+      async (span) => {
+        try {
+          setLoading(true);
+          
+          // Get current user
+          const user = await authService.getCurrentUser();
+          if (!user) return;
+          
+          setCurrentUser(user);
+          span.setAttribute("user_id", user.id);
+          
+          // Get tolerance profile
+          const profile = await drunkSafeService.getUserToleranceProfile(user.id);
+          setToleranceProfile(profile);
+          
+          if (profile) {
+            setProfileForm({
+              weight_kg: profile.weight_kg,
+              gender: profile.gender,
+              tolerance_level: profile.tolerance_level,
+              safe_threshold: profile.safe_threshold,
+              caution_threshold: profile.caution_threshold,
+              danger_threshold: profile.danger_threshold
+            });
+          }
+          
+          // Calculate current BAC
+          await updateBACCalculation();
+          
+          span.setAttribute("initialization_success", true);
+        } catch (error) {
+          console.error('Failed to initialize DrunkSafe:', error);
+          Sentry.captureException(error);
+          span.setAttribute("initialization_success", false);
+        } finally {
+          setLoading(false);
+        }
       }
-      
-      // Calculate current BAC
-      await updateBACCalculation();
-      
-    } catch (error) {
-      console.error('Failed to initialize DrunkSafe:', error);
-    } finally {
-      setLoading(false);
-    }
+    );
   };
 
   const updateBACCalculation = async () => {
     if (!currentUser) return;
     
-    try {
-      const calculation = await drunkSafeService.calculateCurrentBAC(currentUser.id);
-      setBacCalculation(calculation);
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Failed to calculate BAC:', error);
-    }
+    return Sentry.startSpan(
+      {
+        op: "ui.action",
+        name: "Update BAC Calculation",
+      },
+      async (span) => {
+        try {
+          span.setAttribute("user_id", currentUser.id);
+          
+          const calculation = await drunkSafeService.calculateCurrentBAC(currentUser.id);
+          setBacCalculation(calculation);
+          setLastUpdated(new Date());
+          
+          span.setAttribute("bac_updated", true);
+          span.setAttribute("current_bac", calculation.current_bac);
+          span.setAttribute("safety_state", calculation.safety_state);
+        } catch (error) {
+          console.error('Failed to calculate BAC:', error);
+          Sentry.captureException(error);
+          span.setAttribute("bac_updated", false);
+        }
+      }
+    );
   };
 
   const handleSaveProfile = async () => {
-    if (!currentUser) return;
-    
-    try {
-      setProfileSaving(true);
-      
-      const thresholds = profileForm.tolerance_level === 'custom' 
-        ? {
-            safe_threshold: profileForm.safe_threshold,
-            caution_threshold: profileForm.caution_threshold,
-            danger_threshold: profileForm.danger_threshold
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Save DrunkSafe Profile",
+      },
+      async (span) => {
+        if (!currentUser) return;
+        
+        try {
+          setProfileSaving(true);
+          span.setAttribute("user_id", currentUser.id);
+          span.setAttribute("tolerance_level", profileForm.tolerance_level);
+          
+          const thresholds = profileForm.tolerance_level === 'custom' 
+            ? {
+                safe_threshold: profileForm.safe_threshold,
+                caution_threshold: profileForm.caution_threshold,
+                danger_threshold: profileForm.danger_threshold
+              }
+            : drunkSafeService.getDefaultThresholds(profileForm.tolerance_level);
+
+          const profileData = {
+            user_id: currentUser.id,
+            weight_kg: profileForm.weight_kg,
+            gender: profileForm.gender,
+            tolerance_level: profileForm.tolerance_level,
+            safe_threshold: thresholds.safe,
+            caution_threshold: thresholds.caution,
+            danger_threshold: thresholds.danger
+          };
+
+          console.log('Saving profile data:', profileData);
+
+          const savedProfile = await drunkSafeService.createToleranceProfile(profileData);
+          console.log('Profile saved successfully:', savedProfile);
+          
+          setToleranceProfile(savedProfile);
+          setShowProfileSetup(false);
+          
+          // Recalculate BAC with new profile
+          await updateBACCalculation();
+          
+          // Haptic feedback
+          if (navigator.vibrate) {
+            navigator.vibrate(200);
           }
-        : drunkSafeService.getDefaultThresholds(profileForm.tolerance_level);
-
-      const profileData = {
-        user_id: currentUser.id,
-        weight_kg: profileForm.weight_kg,
-        gender: profileForm.gender,
-        tolerance_level: profileForm.tolerance_level,
-        safe_threshold: thresholds.safe,
-        caution_threshold: thresholds.caution,
-        danger_threshold: thresholds.danger
-      };
-
-      console.log('Saving profile data:', profileData);
-
-      const savedProfile = await drunkSafeService.createToleranceProfile(profileData);
-      console.log('Profile saved successfully:', savedProfile);
-      
-      setToleranceProfile(savedProfile);
-      setShowProfileSetup(false);
-      
-      // Recalculate BAC with new profile
-      await updateBACCalculation();
-      
-      // Haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
+          
+          span.setAttribute("profile_saved", true);
+        } catch (error) {
+          console.error('Failed to save profile:', error);
+          Sentry.captureException(error);
+          span.setAttribute("profile_saved", false);
+          alert('Failed to save profile. Please try again.');
+        } finally {
+          setProfileSaving(false);
+        }
       }
-      
-    } catch (error) {
-      console.error('Failed to save profile:', error);
-      alert('Failed to save profile. Please try again.');
-    } finally {
-      setProfileSaving(false);
-    }
+    );
   };
 
   const handleManualDrinkLog = async () => {
-    if (!currentUser || !manualDrink.name) return;
-    
-    try {
-      await drunkSafeService.logDrinkConsumption({
-        user_id: currentUser.id,
-        drink_name: manualDrink.name,
-        volume_ml: manualDrink.volume_ml,
-        abv_percentage: manualDrink.abv_percentage
-      });
-      
-      // Reset form
-      setManualDrink({ name: '', volume_ml: 330, abv_percentage: 5.0 });
-      
-      // Update BAC calculation
-      await updateBACCalculation();
-      
-      // Haptic feedback
-      if (navigator.vibrate) {
-        navigator.vibrate(100);
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Log Manual Drink",
+      },
+      async (span) => {
+        if (!currentUser || !manualDrink.name) return;
+        
+        try {
+          span.setAttribute("user_id", currentUser.id);
+          span.setAttribute("drink_name", manualDrink.name);
+          span.setAttribute("volume_ml", manualDrink.volume_ml);
+          span.setAttribute("abv_percentage", manualDrink.abv_percentage);
+          
+          await drunkSafeService.logDrinkConsumption({
+            user_id: currentUser.id,
+            drink_name: manualDrink.name,
+            volume_ml: manualDrink.volume_ml,
+            abv_percentage: manualDrink.abv_percentage
+          });
+          
+          // Reset form
+          setManualDrink({ name: '', volume_ml: 330, abv_percentage: 5.0 });
+          
+          // Update BAC calculation
+          await updateBACCalculation();
+          
+          // Haptic feedback
+          if (navigator.vibrate) {
+            navigator.vibrate(100);
+          }
+          
+          span.setAttribute("drink_logged", true);
+        } catch (error) {
+          console.error('Failed to log drink:', error);
+          Sentry.captureException(error);
+          span.setAttribute("drink_logged", false);
+        }
       }
-      
-    } catch (error) {
-      console.error('Failed to log drink:', error);
-    }
+    );
   };
 
   const emergencyContacts = [
@@ -247,32 +305,73 @@ function SafetyPage() {
   };
 
   const handleEmergencyCall = () => {
-    setEmergencyPressed(true);
-    if (navigator.vibrate) {
-      navigator.vibrate([200, 100, 200]);
-    }
-    setTimeout(() => setEmergencyPressed(false), 2000);
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Emergency Button Press",
+      },
+      (span) => {
+        setEmergencyPressed(true);
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        setTimeout(() => setEmergencyPressed(false), 2000);
+        
+        span.setAttribute("emergency_pressed", true);
+      }
+    );
   };
 
   const handleTrustedContact = (contact: any) => {
-    if (navigator.vibrate) {
-      navigator.vibrate(100);
-    }
-    console.log(`Calling ${contact.name} at ${contact.number}`);
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Call Trusted Contact",
+      },
+      (span) => {
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+        console.log(`Calling ${contact.name} at ${contact.number}`);
+        
+        span.setAttribute("contact_name", contact.name);
+        span.setAttribute("contact_type", contact.type);
+      }
+    );
   };
 
   const handleRideOrder = (service: string) => {
-    if (navigator.vibrate) {
-      navigator.vibrate(100);
-    }
-    console.log(`Ordering ${service} ride`);
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Order Ride",
+      },
+      (span) => {
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+        console.log(`Ordering ${service} ride`);
+        
+        span.setAttribute("ride_service", service);
+      }
+    );
   };
 
   const handleShareLocation = () => {
-    if (navigator.vibrate) {
-      navigator.vibrate(100);
-    }
-    console.log('Sharing location with emergency contacts');
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Share Location",
+      },
+      (span) => {
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+        console.log('Sharing location with emergency contacts');
+        
+        span.setAttribute("location_shared", true);
+      }
+    );
   };
 
   const bacStatus = getBACStatus();
