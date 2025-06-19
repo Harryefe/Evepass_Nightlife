@@ -41,18 +41,35 @@ export const authService = {
 
       console.log('Auth user created:', authData.user.id)
 
-      // Wait longer for auth state to be established and session to be available
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Wait for auth state to be established
+      await new Promise(resolve => setTimeout(resolve, 1000))
 
-      // Verify we have a valid session before proceeding
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      // Verify session is established by checking multiple times
+      let sessionAttempts = 0
+      let session = null
       
-      if (sessionError || !session) {
-        console.error('Session verification failed:', sessionError)
-        throw new Error('Failed to establish authenticated session')
+      while (sessionAttempts < 5 && !session) {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error('Session check error:', sessionError)
+        }
+        
+        if (currentSession && currentSession.user.id === authData.user.id) {
+          session = currentSession
+          break
+        }
+        
+        sessionAttempts++
+        console.log(`Session attempt ${sessionAttempts}/5...`)
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      console.log('Session verified, proceeding with profile creation')
+      if (!session) {
+        throw new Error('Failed to establish authenticated session after multiple attempts')
+      }
+
+      console.log('Session verified successfully, proceeding with profile creation')
 
       // Prepare profile data with explicit user ID
       const profileData = {
@@ -64,97 +81,53 @@ export const authService = {
 
       console.log('Creating profile with data:', profileData)
 
-      // Create profile in appropriate table using the authenticated session
-      if (userData.user_type === 'customer') {
-        // Use the service role for profile creation to bypass RLS temporarily
-        const { data: profileResult, error: profileError } = await supabase
-          .from('customers')
-          .insert(profileData)
-          .select()
-        
-        if (profileError) {
-          console.error('Customer profile creation error:', profileError)
-          
-          // If it's an RLS error, try with a direct insert using the session
-          if (profileError.message.includes('row-level security')) {
-            console.log('Retrying profile creation with session context...')
-            
-            // Wait a bit more and try again
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            
-            const { data: retryResult, error: retryError } = await supabase
+      // Create profile in appropriate table with retry logic
+      let profileCreated = false
+      let profileAttempts = 0
+      
+      while (!profileCreated && profileAttempts < 3) {
+        try {
+          if (userData.user_type === 'customer') {
+            const { data: profileResult, error: profileError } = await supabase
               .from('customers')
               .insert(profileData)
               .select()
             
-            if (retryError) {
-              console.error('Retry failed:', retryError)
-              // Clean up auth user if profile creation fails
-              try {
-                await supabase.auth.signOut()
-              } catch (cleanupError) {
-                console.error('Cleanup error:', cleanupError)
-              }
-              throw new Error(`Failed to create customer profile: ${retryError.message}`)
+            if (profileError) {
+              throw profileError
             }
             
-            console.log('Customer profile created on retry:', retryResult)
-          } else {
-            // Clean up auth user if profile creation fails
-            try {
-              await supabase.auth.signOut()
-            } catch (cleanupError) {
-              console.error('Cleanup error:', cleanupError)
-            }
-            throw new Error(`Failed to create customer profile: ${profileError.message}`)
-          }
-        } else {
-          console.log('Customer profile created:', profileResult)
-        }
-      } else if (userData.user_type === 'business') {
-        const { data: profileResult, error: profileError } = await supabase
-          .from('businesses')
-          .insert(profileData)
-          .select()
-        
-        if (profileError) {
-          console.error('Business profile creation error:', profileError)
-          
-          // If it's an RLS error, try with a direct insert using the session
-          if (profileError.message.includes('row-level security')) {
-            console.log('Retrying business profile creation with session context...')
-            
-            // Wait a bit more and try again
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            
-            const { data: retryResult, error: retryError } = await supabase
+            console.log('Customer profile created:', profileResult)
+            profileCreated = true
+          } else if (userData.user_type === 'business') {
+            const { data: profileResult, error: profileError } = await supabase
               .from('businesses')
               .insert(profileData)
               .select()
             
-            if (retryError) {
-              console.error('Business retry failed:', retryError)
-              // Clean up auth user if profile creation fails
-              try {
-                await supabase.auth.signOut()
-              } catch (cleanupError) {
-                console.error('Cleanup error:', cleanupError)
-              }
-              throw new Error(`Failed to create business profile: ${retryError.message}`)
+            if (profileError) {
+              throw profileError
             }
             
-            console.log('Business profile created on retry:', retryResult)
-          } else {
-            // Clean up auth user if profile creation fails
+            console.log('Business profile created:', profileResult)
+            profileCreated = true
+          }
+        } catch (profileError: any) {
+          profileAttempts++
+          console.error(`Profile creation attempt ${profileAttempts}/3 failed:`, profileError)
+          
+          if (profileAttempts >= 3) {
+            // Clean up auth user if all profile creation attempts fail
             try {
               await supabase.auth.signOut()
             } catch (cleanupError) {
               console.error('Cleanup error:', cleanupError)
             }
-            throw new Error(`Failed to create business profile: ${profileError.message}`)
+            throw new Error(`Failed to create ${userData.user_type} profile after ${profileAttempts} attempts: ${profileError.message}`)
           }
-        } else {
-          console.log('Business profile created:', profileResult)
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 
@@ -191,8 +164,29 @@ export const authService = {
 
       console.log('Sign in successful for user:', data.user.id)
 
-      // Wait a moment for the session to be established
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Verify session is established
+      let sessionAttempts = 0
+      let session = null
+      
+      while (sessionAttempts < 3 && !session) {
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError) {
+          console.error('Session verification error:', sessionError)
+        }
+        
+        if (currentSession && currentSession.user.id === data.user.id) {
+          session = currentSession
+          break
+        }
+        
+        sessionAttempts++
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+
+      if (!session) {
+        throw new Error('Failed to establish authenticated session')
+      }
 
       return data
     } catch (error) {
