@@ -41,18 +41,8 @@ export const authService = {
 
       console.log('Auth user created:', authData.user.id)
 
-      // Wait for auth state to be established and get a fresh session
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      // Get the current session to ensure we're authenticated
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (sessionError || !session) {
-        console.error('Session error:', sessionError)
-        throw new Error('Failed to establish authenticated session')
-      }
-
-      console.log('Session established for user:', session.user.id)
+      // Wait longer for auth state to be established
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Prepare profile data with explicit user ID
       const profileData = {
@@ -112,18 +102,38 @@ export const authService = {
 
   // Sign in user
   async signIn(email: string, password: string) {
-    // Check if Supabase is configured
-    if (!isSupabaseConfigured()) {
-      throw new Error('Database connection not configured. Please check your environment variables.');
+    try {
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        throw new Error('Database connection not configured. Please check your environment variables.');
+      }
+
+      console.log('Attempting sign in for:', email)
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        console.error('Sign in error:', error)
+        throw error
+      }
+
+      if (!data.user) {
+        throw new Error('Sign in failed - no user returned')
+      }
+
+      console.log('Sign in successful for user:', data.user.id)
+
+      // Wait a moment for the session to be established
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      return data
+    } catch (error) {
+      console.error('Sign in failed:', error)
+      throw error
     }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-
-    if (error) throw error
-    return data
   },
 
   // Sign out user
