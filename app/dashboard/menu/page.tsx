@@ -9,11 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   Plus, Edit, Trash2, Upload, Save, Eye, Star, 
   DollarSign, Package, TrendingUp, Clock
 } from 'lucide-react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 
 // Define interfaces for type safety
 interface MenuItem {
@@ -43,53 +45,8 @@ interface NewItemForm {
   available: boolean;
 }
 
-// Mock menu data
-const mockMenuItems: MenuItem[] = [
-  {
-    id: 1,
-    name: 'Fabric Fizz',
-    description: 'Gin, elderflower, prosecco, lime',
-    price: 12.50,
-    category: 'cocktails',
-    image: 'https://images.pexels.com/photos/1304540/pexels-photo-1304540.jpeg',
-    popular: true,
-    available: true,
-    sales: 45
-  },
-  {
-    id: 2,
-    name: 'Underground Martini',
-    description: 'Premium vodka, dry vermouth, olive',
-    price: 14.00,
-    category: 'cocktails',
-    image: 'https://images.pexels.com/photos/1304540/pexels-photo-1304540.jpeg',
-    popular: false,
-    available: true,
-    sales: 32
-  },
-  {
-    id: 3,
-    name: 'Grey Goose Vodka',
-    description: 'Single shot',
-    price: 8.50,
-    category: 'spirits',
-    image: 'https://images.pexels.com/photos/602750/pexels-photo-602750.jpeg',
-    popular: false,
-    available: true,
-    sales: 28
-  },
-  {
-    id: 4,
-    name: 'Truffle Fries',
-    description: 'Hand-cut fries with truffle oil and parmesan',
-    price: 8.00,
-    category: 'food',
-    image: 'https://images.pexels.com/photos/1893556/pexels-photo-1893556.jpeg',
-    popular: true,
-    available: false,
-    sales: 67
-  }
-];
+// Empty menu for fresh start
+const mockMenuItems: MenuItem[] = [];
 
 const categories: Category[] = [
   { id: 'cocktails', name: 'Signature Cocktails', icon: '🍸' },
@@ -98,7 +55,7 @@ const categories: Category[] = [
   { id: 'food', name: 'Late Night Bites', icon: '🍟' }
 ];
 
-export default function MenuManagementPage() {
+function MenuManagementPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(mockMenuItems);
   const [activeTab, setActiveTab] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -113,23 +70,35 @@ export default function MenuManagementPage() {
   });
 
   const handleAddItem = () => {
-    const item: MenuItem = {
-      id: Date.now(),
-      ...newItem,
-      price: parseFloat(newItem.price),
-      popular: false,
-      sales: 0
-    };
-    setMenuItems([...menuItems, item]);
-    setNewItem({
-      name: '',
-      description: '',
-      price: '',
-      category: 'cocktails',
-      image: '',
-      available: true
-    });
-    setShowAddForm(false);
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Add Menu Item",
+      },
+      (span) => {
+        const item: MenuItem = {
+          id: Date.now(),
+          ...newItem,
+          price: parseFloat(newItem.price),
+          popular: false,
+          sales: 0
+        };
+        setMenuItems([...menuItems, item]);
+        setNewItem({
+          name: '',
+          description: '',
+          price: '',
+          category: 'cocktails',
+          image: '',
+          available: true
+        });
+        setShowAddForm(false);
+        
+        span.setAttribute("item_name", item.name);
+        span.setAttribute("item_category", item.category);
+        span.setAttribute("item_price", item.price);
+      }
+    );
   };
 
   const handleEditItem = (item: MenuItem) => {
@@ -194,12 +163,14 @@ export default function MenuManagementPage() {
               Menu Management
             </Link>
             <div className="flex items-center space-x-4">
-              <Link href={`/menu/fabric-london`}>
-                <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview Menu
-                </Button>
-              </Link>
+              {menuItems.length > 0 && (
+                <Link href={`/menu/your-venue`}>
+                  <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview Menu
+                  </Button>
+                </Link>
+              )}
               <Button 
                 onClick={() => setShowAddForm(true)}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
@@ -245,92 +216,123 @@ export default function MenuManagementPage() {
           </Card>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white/5 border border-purple-500/20">
-            <TabsTrigger value="all" className="data-[state=active]:bg-purple-600">
-              All Items ({menuItems.length})
-            </TabsTrigger>
-            {categories.map((category) => (
-              <TabsTrigger 
-                key={category.id} 
-                value={category.id} 
-                className="data-[state=active]:bg-purple-600"
+        {menuItems.length === 0 ? (
+          // Empty state for new businesses
+          <Card className="bg-white/5 border-purple-500/20">
+            <CardContent className="text-center py-16">
+              <Package className="h-24 w-24 text-gray-400 mx-auto mb-6" />
+              <h2 className="text-3xl font-bold text-white mb-4">Create Your First Menu Item</h2>
+              <p className="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">
+                Start building your digital menu by adding drinks, cocktails, and food items. 
+                Customers will be able to order directly from their phones using QR codes.
+              </p>
+              <Button 
+                onClick={() => setShowAddForm(true)}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-lg px-8 py-4"
               >
-                {category.icon} {category.name.split(' ')[0]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <TabsContent value={activeTab} className="space-y-4">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map((item) => (
-                <Card key={item.id} className="bg-white/5 border-purple-500/20">
-                  <div className="relative">
-                    <img 
-                      src={item.image} 
-                      alt={item.name}
-                      className="w-full h-32 object-cover rounded-t-lg"
-                    />
-                    <div className="absolute top-2 right-2 flex space-x-1">
-                      {item.popular && (
-                        <Badge className="bg-yellow-600 text-white text-xs">
-                          <Star className="h-3 w-3 mr-1" />
-                          Popular
-                        </Badge>
-                      )}
-                      <Badge className={`text-white text-xs ${item.available ? 'bg-green-600' : 'bg-red-600'}`}>
-                        {item.available ? 'Available' : 'Unavailable'}
-                      </Badge>
-                    </div>
+                <Plus className="h-5 w-5 mr-2" />
+                Add Your First Item
+              </Button>
+              
+              <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
+                {categories.map((category) => (
+                  <div key={category.id} className="p-4 bg-white/5 rounded-lg border border-purple-500/20">
+                    <div className="text-3xl mb-2">{category.icon}</div>
+                    <h3 className="text-white font-medium">{category.name}</h3>
+                    <p className="text-gray-400 text-sm">Add items to this category</p>
                   </div>
-                  
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h3 className="text-white font-medium">{item.name}</h3>
-                        <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
-                      </div>
-                      <span className="text-lg font-bold text-purple-400 ml-2">£{item.price.toFixed(2)}</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
-                      <span>Sales: {item.sales}</span>
-                      <span>Revenue: £{(item.price * item.sales).toFixed(2)}</span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => handleEditItem(item)}
-                        className="flex-1 border-purple-500 text-purple-400"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => toggleAvailability(item.id)}
-                        className={`border-gray-500 ${item.available ? 'text-red-400' : 'text-green-400'}`}
-                      >
-                        {item.available ? 'Disable' : 'Enable'}
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="border-red-500 text-red-400"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-5 bg-white/5 border border-purple-500/20">
+              <TabsTrigger value="all" className="data-[state=active]:bg-purple-600">
+                All Items ({menuItems.length})
+              </TabsTrigger>
+              {categories.map((category) => (
+                <TabsTrigger 
+                  key={category.id} 
+                  value={category.id} 
+                  className="data-[state=active]:bg-purple-600"
+                >
+                  {category.icon} {category.name.split(' ')[0]}
+                </TabsTrigger>
               ))}
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsList>
+
+            <TabsContent value={activeTab} className="space-y-4">
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredItems.map((item) => (
+                  <Card key={item.id} className="bg-white/5 border-purple-500/20">
+                    <div className="relative">
+                      <img 
+                        src={item.image || 'https://images.pexels.com/photos/1304540/pexels-photo-1304540.jpeg'} 
+                        alt={item.name}
+                        className="w-full h-32 object-cover rounded-t-lg"
+                      />
+                      <div className="absolute top-2 right-2 flex space-x-1">
+                        {item.popular && (
+                          <Badge className="bg-yellow-600 text-white text-xs">
+                            <Star className="h-3 w-3 mr-1" />
+                            Popular
+                          </Badge>
+                        )}
+                        <Badge className={`text-white text-xs ${item.available ? 'bg-green-600' : 'bg-red-600'}`}>
+                          {item.available ? 'Available' : 'Unavailable'}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h3 className="text-white font-medium">{item.name}</h3>
+                          <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
+                        </div>
+                        <span className="text-lg font-bold text-purple-400 ml-2">£{item.price.toFixed(2)}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
+                        <span>Sales: {item.sales}</span>
+                        <span>Revenue: £{(item.price * item.sales).toFixed(2)}</span>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleEditItem(item)}
+                          className="flex-1 border-purple-500 text-purple-400"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => toggleAvailability(item.id)}
+                          className={`border-gray-500 ${item.available ? 'text-red-400' : 'text-green-400'}`}
+                        >
+                          {item.available ? 'Disable' : 'Enable'}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="border-red-500 text-red-400"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
 
       {/* Add/Edit Item Modal */}
@@ -454,5 +456,13 @@ export default function MenuManagementPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MenuManagementPageWithAuth() {
+  return (
+    <AuthGuard allowedUserTypes={['business']} strictBusinessAccess={true}>
+      <MenuManagementPage />
+    </AuthGuard>
   );
 }

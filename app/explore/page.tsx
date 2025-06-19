@@ -14,6 +14,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { authService } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import * as Sentry from '@sentry/nextjs';
 
 // Define interfaces for type safety
 interface Venue {
@@ -34,7 +35,7 @@ interface Venue {
   hasMenu: boolean;
 }
 
-// Mock data for UK venues
+// Demo venues for fresh user experience
 const mockVenues: Venue[] = [
   {
     id: 1,
@@ -146,6 +147,7 @@ function ExplorePage() {
   const [selectedPrice, setSelectedPrice] = useState('All');
   const [currentLocation, setCurrentLocation] = useState('London, UK');
   const [filteredVenues, setFilteredVenues] = useState<Venue[]>(mockVenues);
+  const [favoriteVenues, setFavoriteVenues] = useState<Set<number>>(new Set());
   const router = useRouter();
 
   useEffect(() => {
@@ -172,12 +174,44 @@ function ExplorePage() {
   }, [searchTerm, selectedGenre, selectedPrice]);
 
   const handleSignOut = async () => {
-    try {
-      await authService.signOut();
-      router.push('/');
-    } catch (error) {
-      console.error('Sign out failed:', error);
-    }
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Customer Sign Out",
+      },
+      async (span) => {
+        try {
+          await authService.signOut();
+          router.push('/');
+          span.setAttribute("signout_success", true);
+        } catch (error) {
+          console.error('Sign out failed:', error);
+          Sentry.captureException(error);
+          span.setAttribute("signout_success", false);
+        }
+      }
+    );
+  };
+
+  const toggleFavorite = (venueId: number) => {
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Toggle Venue Favorite",
+      },
+      (span) => {
+        const newFavorites = new Set(favoriteVenues);
+        if (newFavorites.has(venueId)) {
+          newFavorites.delete(venueId);
+          span.setAttribute("action", "unfavorite");
+        } else {
+          newFavorites.add(venueId);
+          span.setAttribute("action", "favorite");
+        }
+        setFavoriteVenues(newFavorites);
+        span.setAttribute("venue_id", venueId);
+      }
+    );
   };
 
   return (
@@ -231,6 +265,29 @@ function ExplorePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Message for New Users */}
+        <div className="mb-8 p-6 bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-lg border border-purple-500/30">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to Evepass! 🎉</h1>
+          <p className="text-muted-foreground mb-4">
+            Discover amazing venues, order drinks with QR codes, plan your perfect night, and stay safe with DrunkSafe™. 
+            Your nightlife journey starts here!
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/ai-assistant">
+              <Button className="bg-purple-600 hover:bg-purple-700">
+                <Bot className="h-4 w-4 mr-2" />
+                Chat with Eve AI
+              </Button>
+            </Link>
+            <Link href="/safety">
+              <Button variant="outline" className="border-green-500 text-green-500">
+                <span className="mr-2">🛡️</span>
+                Setup DrunkSafe™
+              </Button>
+            </Link>
+          </div>
+        </div>
+
         {/* Search and Filters */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -283,8 +340,13 @@ function ExplorePage() {
                   className="w-full h-48 object-cover rounded-t-lg"
                 />
                 <div className="absolute top-3 right-3">
-                  <Button size="sm" variant="ghost" className="glass hover:bg-red-500/20">
-                    <Heart className="h-4 w-4" />
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => toggleFavorite(venue.id)}
+                    className={`glass ${favoriteVenues.has(venue.id) ? 'bg-red-500/20 text-red-400' : 'hover:bg-red-500/20'}`}
+                  >
+                    <Heart className={`h-4 w-4 ${favoriteVenues.has(venue.id) ? 'fill-current' : ''}`} />
                   </Button>
                 </div>
                 <div className="absolute bottom-3 left-3">

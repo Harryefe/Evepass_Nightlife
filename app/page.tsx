@@ -189,6 +189,25 @@ export default function Home() {
                     Back
                   </Button>
                 </div>
+                
+                {/* Demo Account Information */}
+                <div className="mt-8 p-6 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-lg border border-blue-500/30 max-w-2xl mx-auto">
+                  <h3 className="text-lg font-semibold text-blue-400 mb-3">
+                    {userType === 'customer' ? '🎉 Try the Demo Experience' : '🏢 Business Demo Available'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {userType === 'customer' 
+                      ? 'Experience the full platform with a fresh account. Discover venues, use DrunkSafe™, and chat with Eve AI.'
+                      : 'See how businesses manage their venues, menus, and orders with our comprehensive dashboard.'
+                    }
+                  </p>
+                  <div className="text-xs text-blue-300 bg-blue-500/10 p-3 rounded border border-blue-500/20">
+                    <strong>Demo Features:</strong> {userType === 'customer' 
+                      ? 'Venue discovery, AI assistant, safety monitoring, night planning, and QR code ordering'
+                      : 'Menu management, order processing, analytics dashboard, and customer insights'
+                    }
+                  </div>
+                </div>
               </div>
             )}
           </div>

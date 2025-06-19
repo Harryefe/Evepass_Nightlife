@@ -6,127 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   CheckCircle, Clock, AlertCircle, Search, Filter, 
-  Eye, MessageSquare, Phone, QrCode, CreditCard, Banknote
+  Eye, MessageSquare, Phone, QrCode, CreditCard, Banknote, ShoppingCart
 } from 'lucide-react';
 import Link from 'next/link';
 
-// Define interfaces for type safety
-interface OrderItem {
-  name: string;
-  quantity: number;
-  price: number;
-}
+// Empty orders for fresh start
+const mockOrders: any[] = [];
 
-interface Order {
-  id: string;
-  customerName: string;
-  items: OrderItem[];
-  total: number;
-  paymentMethod: 'card' | 'cash';
-  status: 'pending' | 'cash-pending' | 'completed' | 'cancelled';
-  timestamp: string;
-  tableNumber: string;
-  cashCode: string | null;
-}
-
-// Mock orders data
-const mockOrders: Order[] = [
-  {
-    id: 'ORD-001',
-    customerName: 'Sarah Wilson',
-    items: [
-      { name: 'Fabric Fizz', quantity: 2, price: 12.50 },
-      { name: 'Truffle Fries', quantity: 1, price: 8.00 }
-    ],
-    total: 33.00,
-    paymentMethod: 'card',
-    status: 'pending',
-    timestamp: '2025-01-27T22:15:00Z',
-    tableNumber: 'VIP 3',
-    cashCode: null
-  },
-  {
-    id: 'ORD-002',
-    customerName: 'Mark Johnson',
-    items: [
-      { name: 'Underground Martini', quantity: 1, price: 14.00 },
-      { name: 'Grey Goose Vodka', quantity: 2, price: 8.50 }
-    ],
-    total: 31.00,
-    paymentMethod: 'cash',
-    status: 'cash-pending',
-    timestamp: '2025-01-27T22:10:00Z',
-    tableNumber: 'Main 12',
-    cashCode: 'ABC123'
-  },
-  {
-    id: 'ORD-003',
-    customerName: 'Emma Davis',
-    items: [
-      { name: 'Bass Drop', quantity: 3, price: 11.50 },
-      { name: 'Chicken Wings', quantity: 1, price: 9.50 }
-    ],
-    total: 44.00,
-    paymentMethod: 'card',
-    status: 'completed',
-    timestamp: '2025-01-27T21:45:00Z',
-    tableNumber: 'Main 8',
-    cashCode: null
-  },
-  {
-    id: 'ORD-004',
-    customerName: 'James Brown',
-    items: [
-      { name: 'Hennessy VS', quantity: 1, price: 12.00 },
-      { name: 'Corona Extra', quantity: 2, price: 6.00 }
-    ],
-    total: 24.00,
-    paymentMethod: 'cash',
-    status: 'cash-pending',
-    timestamp: '2025-01-27T22:20:00Z',
-    tableNumber: 'Bar 5',
-    cashCode: 'XYZ789'
-  }
-];
-
-export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+function OrdersPage() {
+  const [orders, setOrders] = useState<any[]>(mockOrders);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const confirmCashPayment = (orderId: string) => {
-    setOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: 'completed' }
-        : order
-    ));
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-600';
-      case 'cash-pending': return 'bg-orange-600';
-      case 'completed': return 'bg-green-600';
-      case 'cancelled': return 'bg-red-600';
-      default: return 'bg-gray-600';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Clock className="h-4 w-4" />;
-      case 'cash-pending': return <QrCode className="h-4 w-4" />;
-      case 'completed': return <CheckCircle className="h-4 w-4" />;
-      case 'cancelled': return <AlertCircle className="h-4 w-4" />;
-      default: return <Clock className="h-4 w-4" />;
-    }
-  };
-
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = order.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         order.id?.toLowerCase().includes(searchTerm.toLowerCase());
     
     if (activeTab === 'all') return matchesSearch;
     if (activeTab === 'pending') return matchesSearch && (order.status === 'pending' || order.status === 'cash-pending');
@@ -198,7 +95,7 @@ export default function OrdersPage() {
             <Card className="bg-white/5 border-pink-500/20">
               <CardContent className="p-4 text-center">
                 <div className="text-2xl font-bold text-pink-400">
-                  £{orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)}
+                  £{orders.reduce((sum, order) => sum + (order.total || 0), 0).toFixed(2)}
                 </div>
                 <div className="text-sm text-gray-400">Total Revenue</div>
               </CardContent>
@@ -220,94 +117,54 @@ export default function OrdersPage() {
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-4">
-            {filteredOrders.length === 0 ? (
+            {orders.length === 0 ? (
               <Card className="bg-white/5 border-purple-500/20">
-                <CardContent className="text-center py-12">
-                  <div className="text-gray-400 text-lg">No orders found</div>
-                  <p className="text-gray-500 text-sm mt-2">
-                    {searchTerm ? 'Try adjusting your search terms' : 'Orders will appear here when customers place them'}
+                <CardContent className="text-center py-16">
+                  <ShoppingCart className="h-24 w-24 text-gray-400 mx-auto mb-6" />
+                  <h2 className="text-3xl font-bold text-white mb-4">No Orders Yet</h2>
+                  <p className="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">
+                    Orders will appear here when customers start ordering from your menu. 
+                    Make sure you have menu items set up and your venue is discoverable.
                   </p>
+                  <div className="flex justify-center space-x-4">
+                    <Link href="/dashboard/menu">
+                      <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                        Set Up Menu
+                      </Button>
+                    </Link>
+                    <Button variant="outline" className="border-purple-400 text-purple-400">
+                      Complete Profile
+                    </Button>
+                  </div>
+                  
+                  <div className="mt-12 p-6 bg-white/5 rounded-lg border border-purple-500/20 max-w-2xl mx-auto">
+                    <h3 className="text-white font-medium mb-3">How Orders Work:</h3>
+                    <div className="space-y-2 text-sm text-gray-400 text-left">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">1</div>
+                        <span>Customers scan QR codes at tables to view your menu</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">2</div>
+                        <span>They place orders directly from their phones</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">3</div>
+                        <span>Orders appear here for you to manage and fulfill</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">4</div>
+                        <span>Cash payments are verified with unique codes</span>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             ) : (
               filteredOrders.map((order) => (
                 <Card key={order.id} className="bg-white/5 border-purple-500/20">
                   <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-4">
-                        <div>
-                          <h3 className="text-white font-medium text-lg">{order.customerName}</h3>
-                          <div className="flex items-center space-x-4 text-sm text-gray-400">
-                            <span>Order {order.id}</span>
-                            <span>Table {order.tableNumber}</span>
-                            <span>{new Date(order.timestamp).toLocaleTimeString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <Badge className={`${getStatusColor(order.status)} text-white flex items-center space-x-1`}>
-                          {getStatusIcon(order.status)}
-                          <span className="capitalize">{order.status.replace('-', ' ')}</span>
-                        </Badge>
-                        <div className="flex items-center space-x-1 text-gray-400">
-                          {order.paymentMethod === 'card' ? (
-                            <CreditCard className="h-4 w-4" />
-                          ) : (
-                            <Banknote className="h-4 w-4" />
-                          )}
-                          <span className="text-sm capitalize">{order.paymentMethod}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Order Items */}
-                    <div className="space-y-2 mb-4">
-                      {order.items.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-white/5 rounded">
-                          <span className="text-gray-300">{item.quantity}× {item.name}</span>
-                          <span className="text-white">£{(item.price * item.quantity).toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-600">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-lg font-bold text-purple-400">
-                          Total: £{order.total.toFixed(2)}
-                        </div>
-                        
-                        {order.status === 'cash-pending' && order.cashCode && (
-                          <div className="flex items-center space-x-2 p-2 bg-yellow-600/20 border border-yellow-600/40 rounded">
-                            <QrCode className="h-4 w-4 text-yellow-400" />
-                            <span className="text-yellow-300 font-mono">{order.cashCode}</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        {order.status === 'cash-pending' && (
-                          <Button 
-                            size="sm" 
-                            onClick={() => confirmCashPayment(order.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Confirm Cash Payment
-                          </Button>
-                        )}
-                        
-                        <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
+                    {/* Order content would go here */}
                   </CardContent>
                 </Card>
               ))
@@ -316,5 +173,13 @@ export default function OrdersPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function OrdersPageWithAuth() {
+  return (
+    <AuthGuard allowedUserTypes={['business']} strictBusinessAccess={true}>
+      <OrdersPage />
+    </AuthGuard>
   );
 }

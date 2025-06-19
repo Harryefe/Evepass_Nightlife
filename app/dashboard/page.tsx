@@ -7,47 +7,72 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Area, AreaChart
 } from 'recharts';
 import { 
   TrendingUp, Users, Calendar, MessageSquare, Star, Settings, 
-  Upload, MapPin, Clock, DollarSign, Eye, Heart, Phone, ShoppingCart, QrCode
+  Upload, MapPin, Clock, DollarSign, Eye, Heart, Phone, ShoppingCart, QrCode, LogOut
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { authService } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+import * as Sentry from '@sentry/nextjs';
 
-// Mock analytics data
+// Mock analytics data - Fresh start for demo
 const revenueData = [
-  { month: 'Jan', revenue: 45000, bookings: 420, orders: 1250 },
-  { month: 'Feb', revenue: 52000, bookings: 380, orders: 1180 },
-  { month: 'Mar', revenue: 48000, bookings: 450, orders: 1320 },
-  { month: 'Apr', revenue: 61000, bookings: 520, orders: 1450 },
-  { month: 'May', revenue: 55000, bookings: 480, orders: 1380 },
-  { month: 'Jun', revenue: 67000, bookings: 580, orders: 1620 },
+  { month: 'Jan', revenue: 0, bookings: 0, orders: 0 },
+  { month: 'Feb', revenue: 0, bookings: 0, orders: 0 },
+  { month: 'Mar', revenue: 0, bookings: 0, orders: 0 },
+  { month: 'Apr', revenue: 0, bookings: 0, orders: 0 },
+  { month: 'May', revenue: 0, bookings: 0, orders: 0 },
+  { month: 'Jun', revenue: 0, bookings: 0, orders: 0 },
 ];
 
 const audienceData = [
-  { name: '18-24', value: 25, color: '#8B5CF6' },
-  { name: '25-30', value: 35, color: '#EC4899' },
-  { name: '31-35', value: 20, color: '#F59E0B' },
-  { name: '36-40', value: 15, color: '#10B981' },
-  { name: '40+', value: 5, color: '#6B7280' },
+  { name: '18-24', value: 0, color: '#8B5CF6' },
+  { name: '25-30', value: 0, color: '#EC4899' },
+  { name: '31-35', value: 0, color: '#F59E0B' },
+  { name: '36-40', value: 0, color: '#10B981' },
+  { name: '40+', value: 0, color: '#6B7280' },
 ];
 
 const trafficData = [
-  { time: '6PM', views: 120, bookings: 15, orders: 45 },
-  { time: '7PM', views: 250, bookings: 28, orders: 78 },
-  { time: '8PM', views: 380, bookings: 45, orders: 125 },
-  { time: '9PM', views: 520, bookings: 67, orders: 180 },
-  { time: '10PM', views: 420, bookings: 52, orders: 145 },
-  { time: '11PM', views: 340, bookings: 38, orders: 98 },
-  { time: '12AM', views: 280, bookings: 25, orders: 67 },
+  { time: '6PM', views: 0, bookings: 0, orders: 0 },
+  { time: '7PM', views: 0, bookings: 0, orders: 0 },
+  { time: '8PM', views: 0, bookings: 0, orders: 0 },
+  { time: '9PM', views: 0, bookings: 0, orders: 0 },
+  { time: '10PM', views: 0, bookings: 0, orders: 0 },
+  { time: '11PM', views: 0, bookings: 0, orders: 0 },
+  { time: '12AM', views: 0, bookings: 0, orders: 0 },
 ];
 
-export default function BusinessDashboard() {
+function BusinessDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Business Sign Out",
+      },
+      async (span) => {
+        try {
+          await authService.signOut();
+          router.push('/');
+          span.setAttribute("signout_success", true);
+        } catch (error) {
+          console.error('Sign out failed:', error);
+          Sentry.captureException(error);
+          span.setAttribute("signout_success", false);
+        }
+      }
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
@@ -68,11 +93,20 @@ export default function BusinessDashboard() {
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm">
                 <MessageSquare className="h-4 w-4 mr-2" />
-                Messages (3)
+                Messages (0)
               </Button>
               <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleSignOut}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
               </Button>
             </div>
           </div>
@@ -80,36 +114,59 @@ export default function BusinessDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Message for New Business */}
+        <div className="mb-8 p-6 bg-gradient-to-r from-purple-600/20 to-pink-600/20 rounded-lg border border-purple-500/30">
+          <h1 className="text-2xl font-bold text-white mb-2">Welcome to Your Business Dashboard!</h1>
+          <p className="text-gray-300 mb-4">
+            You're all set up! Start by adding your menu items, setting up tables, and customizing your venue profile. 
+            Your analytics will populate as customers discover and interact with your venue.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/dashboard/menu">
+              <Button className="bg-purple-600 hover:bg-purple-700">
+                <QrCode className="h-4 w-4 mr-2" />
+                Set Up Menu
+              </Button>
+            </Link>
+            <Link href="/dashboard/profile">
+              <Button variant="outline" className="border-purple-400 text-purple-400">
+                <Settings className="h-4 w-4 mr-2" />
+                Complete Profile
+              </Button>
+            </Link>
+          </div>
+        </div>
+
         {/* Venue Header */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Fabric London</h1>
+              <h2 className="text-3xl font-bold mb-2">Your Venue</h2>
               <p className="text-gray-400 flex items-center">
                 <MapPin className="h-4 w-4 mr-2" />
-                77A Charterhouse Street, London EC1M 3HN
+                Complete your profile to show your address
               </p>
             </div>
             <div className="flex items-center space-x-4 mt-4 md:mt-0">
-              <Badge className="bg-green-600 text-white">
+              <Badge className="bg-yellow-600 text-white">
                 <Clock className="h-3 w-3 mr-1" />
-                Open
+                Setup Required
               </Badge>
               <Badge variant="secondary" className="bg-purple-600/20 text-purple-300">
                 <Star className="h-3 w-3 mr-1" />
-                4.8 Rating
+                New Venue
               </Badge>
             </div>
           </div>
 
-          {/* Quick Stats */}
+          {/* Quick Stats - All zeros for fresh start */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
             <Card className="bg-white/5 border-purple-500/20">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-400">Today's Revenue</p>
-                    <p className="text-2xl font-bold text-green-400">£2,450</p>
+                    <p className="text-2xl font-bold text-green-400">£0</p>
                   </div>
                   <DollarSign className="h-8 w-8 text-green-400" />
                 </div>
@@ -121,7 +178,7 @@ export default function BusinessDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-400">Bookings Today</p>
-                    <p className="text-2xl font-bold text-purple-400">47</p>
+                    <p className="text-2xl font-bold text-purple-400">0</p>
                   </div>
                   <Calendar className="h-8 w-8 text-purple-400" />
                 </div>
@@ -133,7 +190,7 @@ export default function BusinessDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-400">Orders Today</p>
-                    <p className="text-2xl font-bold text-blue-400">89</p>
+                    <p className="text-2xl font-bold text-blue-400">0</p>
                   </div>
                   <ShoppingCart className="h-8 w-8 text-blue-400" />
                 </div>
@@ -145,7 +202,7 @@ export default function BusinessDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-400">Profile Views</p>
-                    <p className="text-2xl font-bold text-pink-400">1,283</p>
+                    <p className="text-2xl font-bold text-pink-400">0</p>
                   </div>
                   <Eye className="h-8 w-8 text-pink-400" />
                 </div>
@@ -157,7 +214,7 @@ export default function BusinessDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-400">Favorites</p>
-                    <p className="text-2xl font-bold text-yellow-400">342</p>
+                    <p className="text-2xl font-bold text-yellow-400">0</p>
                   </div>
                   <Heart className="h-8 w-8 text-yellow-400" />
                 </div>
@@ -184,6 +241,9 @@ export default function BusinessDashboard() {
                     <TrendingUp className="h-5 w-5 mr-2 text-green-400" />
                     Revenue & Orders Trend
                   </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Your revenue will appear here as you start receiving orders
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -211,39 +271,17 @@ export default function BusinessDashboard() {
                     <Users className="h-5 w-5 mr-2 text-pink-400" />
                     Audience Demographics
                   </CardTitle>
+                  <CardDescription className="text-gray-400">
+                    Customer demographics will show as you gain visitors
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={audienceData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {audienceData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-4 space-y-2">
-                    {audienceData.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center">
-                          <div 
-                            className="w-3 h-3 rounded-full mr-2" 
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <span className="text-gray-300">{item.name}</span>
-                        </div>
-                        <span className="text-white">{item.value}%</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-center h-64 text-gray-400">
+                    <div className="text-center">
+                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No customer data yet</p>
+                      <p className="text-sm">Start attracting customers to see demographics</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -251,37 +289,44 @@ export default function BusinessDashboard() {
 
             <Card className="bg-white/5 border-purple-500/20">
               <CardHeader>
-                <CardTitle className="text-white">Recent Activity</CardTitle>
+                <CardTitle className="text-white">Getting Started</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Complete these steps to start attracting customers
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-4 p-3 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">1</div>
                     <div className="flex-1">
-                      <p className="text-white text-sm">New order: 2x Fabric Fizz, 1x Truffle Fries - Table VIP 3</p>
-                      <p className="text-gray-400 text-xs">2 minutes ago</p>
+                      <p className="text-white text-sm font-medium">Set up your menu with drinks and food items</p>
+                      <p className="text-gray-400 text-xs">Add photos, prices, and descriptions</p>
                     </div>
+                    <Link href="/dashboard/menu">
+                      <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
+                        Set Up Menu
+                      </Button>
+                    </Link>
                   </div>
                   <div className="flex items-center space-x-4 p-3 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">2</div>
                     <div className="flex-1">
-                      <p className="text-white text-sm">Cash payment confirmed: Order #ABC123 - £31.00</p>
-                      <p className="text-gray-400 text-xs">5 minutes ago</p>
+                      <p className="text-white text-sm font-medium">Complete your venue profile</p>
+                      <p className="text-gray-400 text-xs">Add photos, description, and contact details</p>
                     </div>
+                    <Button size="sm" variant="outline" className="border-blue-500 text-blue-400">
+                      Complete Profile
+                    </Button>
                   </div>
                   <div className="flex items-center space-x-4 p-3 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                    <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">3</div>
                     <div className="flex-1">
-                      <p className="text-white text-sm">New booking for table of 6 - Tonight 10:30 PM</p>
-                      <p className="text-gray-400 text-xs">10 minutes ago</p>
+                      <p className="text-white text-sm font-medium">Configure table bookings</p>
+                      <p className="text-gray-400 text-xs">Set up tables and booking preferences</p>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-4 p-3 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-white text-sm">Review received: 5 stars - "Amazing night!"</p>
-                      <p className="text-gray-400 text-xs">15 minutes ago</p>
-                    </div>
+                    <Button size="sm" variant="outline" className="border-green-500 text-green-400">
+                      Setup Tables
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -308,13 +353,13 @@ export default function BusinessDashboard() {
               <CardContent>
                 <div className="text-center py-8">
                   <ShoppingCart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-medium text-white mb-2">Order Management</h3>
+                  <h3 className="text-xl font-medium text-white mb-2">No Orders Yet</h3>
                   <p className="text-gray-400 mb-4">
-                    View and manage all customer orders, including cash payment confirmations
+                    Orders will appear here once customers start ordering from your menu
                   </p>
-                  <Link href="/dashboard/orders">
+                  <Link href="/dashboard/menu">
                     <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                      Access Order Dashboard
+                      Set Up Menu First
                     </Button>
                   </Link>
                 </div>
@@ -329,7 +374,7 @@ export default function BusinessDashboard() {
                   <div>
                     <CardTitle className="text-white">Menu Management</CardTitle>
                     <CardDescription className="text-gray-400">
-                      Manage your drinks and food menu for real-time ordering
+                      Create your digital menu for real-time ordering
                     </CardDescription>
                   </div>
                   <Link href="/dashboard/menu">
@@ -342,13 +387,13 @@ export default function BusinessDashboard() {
               <CardContent>
                 <div className="text-center py-8">
                   <QrCode className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-medium text-white mb-2">Digital Menu System</h3>
+                  <h3 className="text-xl font-medium text-white mb-2">Create Your Digital Menu</h3>
                   <p className="text-gray-400 mb-4">
-                    Create and manage your digital menu with photos, prices, and real-time availability
+                    Add drinks, cocktails, and food items with photos and prices
                   </p>
                   <Link href="/dashboard/menu">
                     <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                      Setup Menu
+                      Start Adding Items
                     </Button>
                   </Link>
                 </div>
@@ -359,43 +404,21 @@ export default function BusinessDashboard() {
           <TabsContent value="bookings" className="space-y-6">
             <Card className="bg-white/5 border-purple-500/20">
               <CardHeader>
-                <CardTitle className="text-white">Today's Bookings</CardTitle>
+                <CardTitle className="text-white">Table Bookings</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Manage table reservations and event bookings
+                  No bookings yet - set up your tables to start accepting reservations
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { time: '7:30 PM', party: 4, name: 'Sarah Wilson', status: 'Confirmed', table: 'VIP 3' },
-                    { time: '8:00 PM', party: 2, name: 'Mark Johnson', status: 'Pending', table: 'Main 12' },
-                    { time: '9:30 PM', party: 6, name: 'Birthday Party', status: 'Confirmed', table: 'VIP 1' },
-                    { time: '10:30 PM', party: 8, name: 'Corporate Event', status: 'Confirmed', table: 'Private Room' },
-                  ].map((booking, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-purple-500/10">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-center">
-                          <div className="text-white font-medium">{booking.time}</div>
-                          <div className="text-xs text-gray-400">Tonight</div>
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">{booking.name}</div>
-                          <div className="text-sm text-gray-400">Party of {booking.party} • {booking.table}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Badge className={booking.status === 'Confirmed' ? 'bg-green-600' : 'bg-yellow-600'}>
-                          {booking.status}
-                        </Badge>
-                        <Button size="sm" variant="ghost">
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="text-center py-8">
+                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2">No Bookings Yet</h3>
+                  <p className="text-gray-400 mb-4">
+                    Configure your tables and booking settings to start accepting reservations
+                  </p>
+                  <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
+                    Set Up Tables
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -406,7 +429,7 @@ export default function BusinessDashboard() {
               <CardHeader>
                 <CardTitle className="text-white">Venue Profile</CardTitle>
                 <CardDescription className="text-gray-400">
-                  Update your venue information and photos
+                  Complete your venue information to attract customers
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -414,33 +437,33 @@ export default function BusinessDashboard() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Venue Name</label>
-                      <Input defaultValue="Fabric London" className="bg-white/10 border-purple-500/30 text-white" />
+                      <Input placeholder="Enter your venue name" className="bg-white/10 border-purple-500/30 text-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
                       <Textarea 
-                        defaultValue="London's legendary underground nightclub featuring cutting-edge electronic music and world-class sound system."
+                        placeholder="Describe your venue, atmosphere, and what makes it special"
                         className="bg-white/10 border-purple-500/30 text-white h-32"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
-                      <Input defaultValue="77A Charterhouse Street, London EC1M 3HN" className="bg-white/10 border-purple-500/30 text-white" />
+                      <Input placeholder="Full venue address" className="bg-white/10 border-purple-500/30 text-white" />
                     </div>
                   </div>
                   
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Capacity</label>
-                      <Input defaultValue="2500" className="bg-white/10 border-purple-500/30 text-white" />
+                      <Input placeholder="Maximum capacity" className="bg-white/10 border-purple-500/30 text-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Opening Hours</label>
-                      <Input defaultValue="10:00 PM - 6:00 AM" className="bg-white/10 border-purple-500/30 text-white" />
+                      <Input placeholder="e.g., 6:00 PM - 2:00 AM" className="bg-white/10 border-purple-500/30 text-white" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">Music Genres</label>
-                      <Input defaultValue="Electronic, Techno, House, Drum & Bass" className="bg-white/10 border-purple-500/30 text-white" />
+                      <Input placeholder="e.g., Electronic, House, Techno" className="bg-white/10 border-purple-500/30 text-white" />
                     </div>
                   </div>
                 </div>
@@ -457,7 +480,7 @@ export default function BusinessDashboard() {
                 </div>
                 
                 <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
-                  Update Profile
+                  Save Profile
                 </Button>
               </CardContent>
             </Card>
@@ -466,31 +489,42 @@ export default function BusinessDashboard() {
           <TabsContent value="analytics" className="space-y-6">
             <Card className="bg-white/5 border-purple-500/20">
               <CardHeader>
-                <CardTitle className="text-white">Hourly Traffic, Bookings & Orders</CardTitle>
+                <CardTitle className="text-white">Analytics Dashboard</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Analytics will populate as customers interact with your venue
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={trafficData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="time" stroke="#9CA3AF" />
-                    <YAxis stroke="#9CA3AF" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: '#1F2937', 
-                        border: '1px solid #8B5CF6',
-                        borderRadius: '8px'
-                      }} 
-                    />
-                    <Line type="monotone" dataKey="views" stroke="#8B5CF6" strokeWidth={2} name="Profile Views" />
-                    <Line type="monotone" dataKey="bookings" stroke="#EC4899" strokeWidth={2} name="Bookings" />
-                    <Line type="monotone" dataKey="orders" stroke="#10B981" strokeWidth={2} name="Orders" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div className="text-center py-12">
+                  <TrendingUp className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2">No Analytics Data Yet</h3>
+                  <p className="text-gray-400 mb-4">
+                    Complete your setup and start attracting customers to see detailed analytics
+                  </p>
+                  <div className="flex justify-center space-x-4">
+                    <Link href="/dashboard/menu">
+                      <Button className="bg-purple-600 hover:bg-purple-700">
+                        Set Up Menu
+                      </Button>
+                    </Link>
+                    <Button variant="outline" className="border-purple-400 text-purple-400">
+                      Complete Profile
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function BusinessDashboardWithAuth() {
+  return (
+    <AuthGuard allowedUserTypes={['business']} strictBusinessAccess={true}>
+      <BusinessDashboard />
+    </AuthGuard>
   );
 }
