@@ -1,4 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import * as Sentry from '@sentry/nextjs'
 
 export interface AuthUser {
@@ -313,8 +315,8 @@ export const authService = {
     )
   },
 
-  // Get current user with profile
-  async getCurrentUser(): Promise<AuthUser | null> {
+  // Get current user with profile - now accepts optional Supabase client for server-side usage
+  async getCurrentUser(supabaseClient?: any): Promise<AuthUser | null> {
     return Sentry.startSpan(
       {
         op: "auth.getCurrentUser",
@@ -327,14 +329,17 @@ export const authService = {
             return null
           }
 
-          const { data: { user } } = await supabase.auth.getUser()
+          // Use provided client (for server-side) or default client (for client-side)
+          const client = supabaseClient || supabase
+          
+          const { data: { user } } = await client.auth.getUser()
           
           if (!user) return null
 
           const userType = user.user_metadata?.user_type || 'customer'
           const tableName = userType === 'customer' ? 'customers' : 'businesses'
           
-          const { data: profile, error } = await supabase
+          const { data: profile, error } = await client
             .from(tableName)
             .select('*')
             .eq('id', user.id)

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { elevenLabsService, VOICE_IDS, getVoiceSettingsForContext } from '@/lib/elevenlabs';
 import { authService } from '@/lib/auth';
 import { EvePassKnowledgeService } from '@/lib/evepass-knowledge';
@@ -14,8 +16,11 @@ export async function POST(request: NextRequest) {
     },
     async (span) => {
       try {
-        // AUTHENTICATION CHECK - Verify user is signed in
-        const currentUser = await authService.getCurrentUser();
+        // Create a Supabase client that can read cookies from the request
+        const supabaseClient = createServerComponentClient({ cookies });
+
+        // AUTHENTICATION CHECK - Verify user is signed in using request-aware client
+        const currentUser = await authService.getCurrentUser(supabaseClient);
         if (!currentUser) {
           span.setAttribute("auth_failed", true);
           return NextResponse.json(
