@@ -162,7 +162,7 @@ export const authService = {
     )
   },
 
-  // Sign in user
+  // Sign in user with improved error handling
   async signIn(email: string, password: string) {
     return Sentry.startSpan(
       {
@@ -171,7 +171,7 @@ export const authService = {
       },
       async (span) => {
         try {
-          // Check if Supabase is configured
+          // Check if Supabase is configured first
           if (!isSupabaseConfigured()) {
             throw new Error('Database connection not configured. Please check your environment variables.');
           }
@@ -179,6 +179,25 @@ export const authService = {
           span.setAttribute("email", email);
           console.log('Attempting sign in for:', email)
 
+          // Test connection first with a simple query
+          try {
+            const { data: connectionTest, error: connectionError } = await supabase
+              .from('customers')
+              .select('id')
+              .limit(1)
+
+            if (connectionError && connectionError.message.includes('Invalid API key')) {
+              throw new Error('Database configuration error. Please check your Supabase credentials.');
+            }
+          } catch (connectionError: any) {
+            console.error('Connection test failed:', connectionError)
+            if (connectionError.message.includes('fetch')) {
+              throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+            }
+            throw connectionError
+          }
+
+          // Attempt sign in
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password
@@ -187,6 +206,18 @@ export const authService = {
           if (error) {
             console.error('Sign in error:', error)
             Sentry.captureException(error)
+            
+            // Provide more specific error messages
+            if (error.message.includes('Invalid login credentials')) {
+              throw new Error('Invalid email or password. Please check your credentials and try again.');
+            } else if (error.message.includes('Email not confirmed')) {
+              throw new Error('Please check your email and click the confirmation link before signing in.');
+            } else if (error.message.includes('Too many requests')) {
+              throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
+            } else if (error.message.includes('fetch')) {
+              throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+            }
+            
             throw error
           }
 
@@ -199,25 +230,30 @@ export const authService = {
           console.log('Sign in successful for user:', data.user.id)
           span.setAttribute("user_id", data.user.id);
 
-          // Verify session is established
+          // Verify session is established with timeout
           let sessionAttempts = 0
           let session = null
           
           while (sessionAttempts < 3 && !session) {
-            const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
-            
-            if (sessionError) {
-              console.error('Session verification error:', sessionError)
-              Sentry.captureException(sessionError)
+            try {
+              const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+              
+              if (sessionError) {
+                console.error('Session verification error:', sessionError)
+                Sentry.captureException(sessionError)
+              }
+              
+              if (currentSession && currentSession.user.id === data.user.id) {
+                session = currentSession
+                break
+              }
+              
+              sessionAttempts++
+              await new Promise(resolve => setTimeout(resolve, 300))
+            } catch (sessionCheckError) {
+              console.error('Session check failed:', sessionCheckError)
+              sessionAttempts++
             }
-            
-            if (currentSession && currentSession.user.id === data.user.id) {
-              session = currentSession
-              break
-            }
-            
-            sessionAttempts++
-            await new Promise(resolve => setTimeout(resolve, 300))
           }
 
           if (!session) {
@@ -228,11 +264,24 @@ export const authService = {
 
           span.setAttribute("signin_success", true);
           return data
-        } catch (error) {
+        } catch (error: any) {
           console.error('Sign in failed:', error)
           span.setAttribute("signin_success", false);
           Sentry.captureException(error)
-          throw error
+          
+          // Re-throw with original message if it's already user-friendly
+          if (error.message && (
+            error.message.includes('Unable to connect') ||
+            error.message.includes('Invalid email') ||
+            error.message.includes('Database configuration') ||
+            error.message.includes('check your internet') ||
+            error.message.includes('Too many requests')
+          )) {
+            throw error
+          }
+          
+          // Default fallback error
+          throw new Error('Unable to connect to the server. Please check your internet connection and try again.')
         }
       }
     )

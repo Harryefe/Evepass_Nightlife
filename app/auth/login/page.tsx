@@ -8,17 +8,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Building, User, ArrowRight, AlertCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { authService } from '@/lib/auth';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured, testSupabaseConnection } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [userType, setUserType] = useState<'customer' | 'business'>('customer');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'testing' | 'connected' | 'failed'>('unknown');
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -27,6 +28,24 @@ export default function LoginPage() {
 
   // Check if Supabase is configured
   const supabaseConfigured = isSupabaseConfigured();
+
+  // Test connection function
+  const testConnection = async () => {
+    setConnectionStatus('testing');
+    try {
+      const result = await testSupabaseConnection();
+      if (result.success) {
+        setConnectionStatus('connected');
+        setError('');
+      } else {
+        setConnectionStatus('failed');
+        setError(result.error || 'Connection test failed');
+      }
+    } catch (error: any) {
+      setConnectionStatus('failed');
+      setError(error.message || 'Connection test failed');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,18 +69,13 @@ export default function LoginPage() {
         router.push(redirectPath);
       }
     } catch (err: any) {
+      console.error('Login error:', err);
+      
       let errorMessage = 'Failed to sign in';
       
       if (err.message) {
-        if (err.message.includes('fetch')) {
-          errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
-        } else if (err.message.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-        } else if (err.message.includes('Invalid API key')) {
-          errorMessage = 'Database configuration error. Please contact support.';
-        } else {
-          errorMessage = err.message;
-        }
+        // Use the error message directly since auth service now provides user-friendly messages
+        errorMessage = err.message;
       }
       
       setError(errorMessage);
@@ -146,6 +160,37 @@ export default function LoginPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Connection Status */}
+              <div className="mb-4 p-3 rounded-lg bg-muted/20 border border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {connectionStatus === 'connected' ? (
+                      <Wifi className="h-4 w-4 text-green-500" />
+                    ) : connectionStatus === 'failed' ? (
+                      <WifiOff className="h-4 w-4 text-red-500" />
+                    ) : connectionStatus === 'testing' ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    ) : (
+                      <Wifi className="h-4 w-4 text-gray-400" />
+                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {connectionStatus === 'connected' ? 'Connected' :
+                       connectionStatus === 'failed' ? 'Connection Failed' :
+                       connectionStatus === 'testing' ? 'Testing...' : 'Connection Status'}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={testConnection}
+                    disabled={connectionStatus === 'testing'}
+                    className="text-xs"
+                  >
+                    Test Connection
+                  </Button>
+                </div>
+              </div>
+
               <Tabs value={userType} onValueChange={(value) => setUserType(value as 'customer' | 'business')} className="mb-6">
                 <TabsList className="grid w-full grid-cols-2 glass border border-border/50">
                   <TabsTrigger value="customer" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
@@ -179,6 +224,7 @@ export default function LoginPage() {
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="pl-10 glass border-border/50"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -195,6 +241,7 @@ export default function LoginPage() {
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       className="pl-10 pr-10 glass border-border/50"
                       required
+                      disabled={isLoading}
                     />
                     <Button
                       type="button"
@@ -202,6 +249,7 @@ export default function LoginPage() {
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -210,7 +258,7 @@ export default function LoginPage() {
 
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center space-x-2 text-muted-foreground">
-                    <input type="checkbox" className="rounded border-border" />
+                    <input type="checkbox" className="rounded border-border" disabled={isLoading} />
                     <span>Remember me</span>
                   </label>
                   <Link href="/auth/forgot-password" className="text-primary hover:text-primary/80">
@@ -221,11 +269,11 @@ export default function LoginPage() {
                 <Button 
                   type="submit" 
                   className="w-full glass glow-green hover-lift"
-                  disabled={isLoading}
+                  disabled={isLoading || connectionStatus === 'failed'}
                 >
                   {isLoading ? (
                     <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Signing in...</span>
                     </div>
                   ) : (

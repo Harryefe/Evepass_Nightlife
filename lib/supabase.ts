@@ -18,18 +18,56 @@ const finalKey = hasValidCredentials ? supabaseAnonKey : 'placeholder-key'
 
 if (!hasValidCredentials) {
   console.warn('Supabase not configured: Please set up your Supabase credentials in .env.local')
+  console.warn('Required variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY')
 }
 
 export const supabase = createClient(finalUrl, finalKey, {
   auth: {
     autoRefreshToken: hasValidCredentials,
     persistSession: hasValidCredentials,
-    detectSessionInUrl: hasValidCredentials
+    detectSessionInUrl: hasValidCredentials,
+    flowType: 'pkce'
+  },
+  global: {
+    headers: {
+      'x-client-info': 'evepass-web@1.0.0'
+    }
+  },
+  db: {
+    schema: 'public'
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 })
 
 // Helper function to check if Supabase is properly configured
 export const isSupabaseConfigured = () => hasValidCredentials
+
+// Test connection function
+export const testSupabaseConnection = async () => {
+  try {
+    if (!hasValidCredentials) {
+      return { success: false, error: 'Supabase credentials not configured' }
+    }
+
+    // Test with a simple query
+    const { data, error } = await supabase
+      .from('customers')
+      .select('id')
+      .limit(1)
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, message: 'Connection successful' }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Connection failed' }
+  }
+}
 
 // Database types
 export interface Customer {
