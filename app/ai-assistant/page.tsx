@@ -71,13 +71,19 @@ const mockVenueRecommendations: Venue[] = [
   }
 ];
 
+// Global flag to track if the widget script has been loaded
+let widgetScriptLoaded = false;
+let widgetScriptPromise: Promise<boolean> | null = null;
+
 function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [widgetMode, setWidgetMode] = useState<'embedded' | 'chat'>('embedded');
   const [widgetLoaded, setWidgetLoaded] = useState(false);
+  const [widgetError, setWidgetError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const widgetContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -88,31 +94,99 @@ function AIAssistantPage() {
   }, [messages]);
 
   useEffect(() => {
-    // Load the ElevenLabs widget script
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed';
-    script.async = true;
-    script.type = 'text/javascript';
-    
-    script.onload = () => {
-      console.log('ElevenLabs widget script loaded');
-      setWidgetLoaded(true);
-    };
-    
-    script.onerror = () => {
-      console.error('Failed to load ElevenLabs widget script');
-      setWidgetLoaded(false);
-    };
+    // Only load the widget script if we're in embedded mode
+    if (widgetMode === 'embedded') {
+      loadElevenLabsWidget();
+    }
+  }, [widgetMode]);
 
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup script on unmount
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
+  const loadElevenLabsWidget = async () => {
+    try {
+      // If script is already loaded or loading, wait for it
+      if (widgetScriptPromise) {
+        const success = await widgetScriptPromise;
+        setWidgetLoaded(success);
+        setWidgetError(success ? null : 'Failed to load widget script');
+        return;
       }
-    };
-  }, []);
+
+      // If script was already loaded successfully, just set state
+      if (widgetScriptLoaded) {
+        setWidgetLoaded(true);
+        setWidgetError(null);
+        return;
+      }
+
+      // Check if custom element is already defined
+      if (customElements.get('elevenlabs-convai')) {
+        console.log('ElevenLabs widget already registered');
+        widgetScriptLoaded = true;
+        setWidgetLoaded(true);
+        setWidgetError(null);
+        return;
+      }
+
+      // Create a promise for script loading
+      widgetScriptPromise = new Promise((resolve) => {
+        // Check if script already exists in DOM
+        const existingScript = document.querySelector('script[src*="convai-widget-embed"]');
+        if (existingScript) {
+          console.log('ElevenLabs script already exists in DOM');
+          // Wait a bit for it to load if it hasn't already
+          setTimeout(() => {
+            const isLoaded = customElements.get('elevenlabs-convai');
+            if (isLoaded) {
+              widgetScriptLoaded = true;
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }, 1000);
+          return;
+        }
+
+        // Create and load the script
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed';
+        script.async = true;
+        script.type = 'text/javascript';
+        
+        script.onload = () => {
+          console.log('ElevenLabs widget script loaded successfully');
+          // Give it a moment to register the custom element
+          setTimeout(() => {
+            const isRegistered = customElements.get('elevenlabs-convai');
+            if (isRegistered) {
+              widgetScriptLoaded = true;
+              resolve(true);
+            } else {
+              console.error('Custom element not registered after script load');
+              resolve(false);
+            }
+          }, 500);
+        };
+        
+        script.onerror = (error) => {
+          console.error('Failed to load ElevenLabs widget script:', error);
+          resolve(false);
+        };
+
+        // Add script to head
+        document.head.appendChild(script);
+      });
+
+      // Wait for the script to load
+      const success = await widgetScriptPromise;
+      setWidgetLoaded(success);
+      setWidgetError(success ? null : 'Failed to load ElevenLabs widget');
+
+    } catch (error) {
+      console.error('Error loading ElevenLabs widget:', error);
+      setWidgetError('Error loading widget');
+      setWidgetLoaded(false);
+      Sentry.captureException(error);
+    }
+  };
 
   const handleSendMessage = async () => {
     return Sentry.startSpan(
@@ -223,6 +297,14 @@ function AIAssistantPage() {
     setInputValue(suggestion);
   };
 
+  const handleModeSwitch = (mode: 'embedded' | 'chat') => {
+    setWidgetMode(mode);
+    if (mode === 'embedded') {
+      setWidgetError(null);
+      setWidgetLoaded(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
       {/* Header */}
@@ -240,13 +322,22 @@ function AIAssistantPage() {
             </div>
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1">
-                {widgetLoaded ? (
-                  <CheckCircle className="h-4 w-4 text-green-500" />
+                {widgetMode === 'embedded' ? (
+                  widgetLoaded ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : widgetError ? (
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  )
                 ) : (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <CheckCircle className="h-4 w-4 text-blue-500" />
                 )}
                 <span className="text-xs text-gray-400">
-                  {widgetLoaded ? 'Voice AI Ready' : 'Loading...'}
+                  {widgetMode === 'embedded' ? (
+                    widgetLoaded ? 'Voice AI Ready' : 
+                    widgetError ? 'Widget Error' : 'Loading Widget...'
+                  ) : 'Text Chat Ready'}
                 </span>
               </div>
               <Link href="/explore">
@@ -272,7 +363,7 @@ function AIAssistantPage() {
                 <Button
                   size="sm"
                   variant={widgetMode === 'embedded' ? 'default' : 'outline'}
-                  onClick={() => setWidgetMode('embedded')}
+                  onClick={() => handleModeSwitch('embedded')}
                   className={widgetMode === 'embedded' 
                     ? 'bg-purple-600 hover:bg-purple-700' 
                     : 'border-purple-400 text-purple-400'
@@ -284,7 +375,7 @@ function AIAssistantPage() {
                 <Button
                   size="sm"
                   variant={widgetMode === 'chat' ? 'default' : 'outline'}
-                  onClick={() => setWidgetMode('chat')}
+                  onClick={() => handleModeSwitch('chat')}
                   className={widgetMode === 'chat' 
                     ? 'bg-blue-600 hover:bg-blue-700' 
                     : 'border-blue-400 text-blue-400'
@@ -299,12 +390,22 @@ function AIAssistantPage() {
             <div className="mt-3 text-sm text-gray-400">
               {widgetMode === 'embedded' ? (
                 <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-4 w-4 text-green-400" />
-                  <span>Full voice conversation with ElevenLabs AI - speak naturally with Eve!</span>
+                  {widgetLoaded ? (
+                    <CheckCircle className="h-4 w-4 text-green-400" />
+                  ) : widgetError ? (
+                    <AlertCircle className="h-4 w-4 text-red-400" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                  )}
+                  <span>
+                    {widgetLoaded ? 'Full voice conversation with ElevenLabs AI - speak naturally with Eve!' :
+                     widgetError ? 'Widget failed to load - try refreshing or use text chat' :
+                     'Loading voice AI widget...'}
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-center space-x-2">
-                  <AlertCircle className="h-4 w-4 text-blue-400" />
+                  <CheckCircle className="h-4 w-4 text-blue-400" />
                   <span>Text-based chat with venue recommendations and suggestions</span>
                 </div>
               )}
@@ -325,7 +426,32 @@ function AIAssistantPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {widgetLoaded ? (
+              {widgetError ? (
+                <div className="text-center py-8">
+                  <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-white mb-2">Widget Loading Error</h3>
+                  <p className="text-gray-400 mb-4">{widgetError}</p>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => {
+                        setWidgetError(null);
+                        setWidgetLoaded(false);
+                        loadElevenLabsWidget();
+                      }}
+                      className="bg-purple-600 hover:bg-purple-700 mr-2"
+                    >
+                      Retry Loading
+                    </Button>
+                    <Button 
+                      onClick={() => handleModeSwitch('chat')}
+                      variant="outline" 
+                      className="border-blue-400 text-blue-400"
+                    >
+                      Use Text Chat Instead
+                    </Button>
+                  </div>
+                </div>
+              ) : widgetLoaded ? (
                 <div className="space-y-4">
                   {/* ElevenLabs Widget Container */}
                   <div className="bg-black/50 rounded-lg p-6 border border-purple-500/30">
@@ -338,7 +464,7 @@ function AIAssistantPage() {
                     </div>
                     
                     {/* ElevenLabs Widget */}
-                    <div className="flex justify-center">
+                    <div className="flex justify-center" ref={widgetContainerRef}>
                       <elevenlabs-convai agent-id="agent_01jy55g4rae74rc7vktwjw0mjv"></elevenlabs-convai>
                     </div>
                   </div>
@@ -369,6 +495,7 @@ function AIAssistantPage() {
                 <div className="text-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-400" />
                   <p className="text-gray-400">Loading voice AI widget...</p>
+                  <p className="text-sm text-gray-500 mt-2">This may take a few moments</p>
                 </div>
               )}
             </CardContent>
