@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   Bot, Send, Mic, MicOff, Volume2, VolumeX, 
   MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2
@@ -74,7 +75,7 @@ const mockVenueRecommendations: Venue[] = [
   }
 ];
 
-export default function AIAssistantPage() {
+function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -560,5 +561,14 @@ export default function AIAssistantPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// Wrap the component with AuthGuard to require authentication
+export default function AIAssistantPageWithAuth() {
+  return (
+    <AuthGuard allowedUserTypes={['customer']}>
+      <AIAssistantPage />
+    </AuthGuard>
   );
 }
