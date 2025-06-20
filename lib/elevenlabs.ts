@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 
-// ElevenLabs API configuration
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
+// ElevenLabs API configuration - Updated with new API key
+const ELEVENLABS_API_KEY = 'sk_c53c05c01141a4ec985fc7850cd2a06a3d4964e1e653a802'
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1'
 
 // Voice IDs for different personalities

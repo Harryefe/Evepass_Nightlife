@@ -6,9 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { AuthGuard } from '@/components/auth/auth-guard';
+import { EvePassKnowledgeService } from '@/lib/evepass-knowledge';
 import { 
   Bot, Send, Mic, MicOff, Volume2, VolumeX, 
-  MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2, AlertCircle, CheckCircle, ExternalLink
+  MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2, AlertCircle, CheckCircle, ExternalLink,
+  Brain, Search, BookOpen, Users, Shield, Music, Wine
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -32,20 +34,23 @@ interface Message {
   timestamp: Date;
   suggestions?: string[];
   venues?: Venue[];
+  platformStats?: any;
 }
 
-// Mock conversation data
+// Mock conversation data with EvePass knowledge
 const initialMessages: Message[] = [
   {
     id: 1,
     type: 'ai',
-    content: "Hi! I'm Eve, your AI nightlife assistant. I can help you discover venues, plan your night, manage your budget, and keep you safe. What would you like to do tonight?",
+    content: "Hi! I'm Eve, your AI nightlife assistant powered by the complete EvePass knowledge base! 🌟 I can help you discover venues, plan your perfect night, manage your budget with DrunkSafe™, explore social features like Share a Bottle, and keep you safe. I know everything about EvePass - from our 2,500+ partner venues to our 98% safety score. What would you like to explore tonight?",
     timestamp: new Date(),
     suggestions: [
       "Find venues near me",
-      "Plan a night out", 
-      "Check my budget",
-      "Safety tips"
+      "How does DrunkSafe work?", 
+      "Plan my perfect night",
+      "What is Share a Bottle?",
+      "Show me safety features",
+      "How to request songs?"
     ]
   }
 ];
@@ -82,6 +87,9 @@ function AIAssistantPage() {
   const [widgetMode, setWidgetMode] = useState<'embedded' | 'chat'>('embedded');
   const [widgetLoaded, setWidgetLoaded] = useState(false);
   const [widgetError, setWidgetError] = useState<string | null>(null);
+  const [showKnowledgeSearch, setShowKnowledgeSearch] = useState(false);
+  const [knowledgeQuery, setKnowledgeQuery] = useState('');
+  const [knowledgeResults, setKnowledgeResults] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const widgetContainerRef = useRef<HTMLDivElement>(null);
 
@@ -192,12 +200,13 @@ function AIAssistantPage() {
     return Sentry.startSpan(
       {
         op: "ui.click",
-        name: "Send AI Message",
+        name: "Send AI Message with EvePass Knowledge",
       },
       async (span) => {
         if (!inputValue.trim()) return;
 
         span.setAttribute("message_length", inputValue.length);
+        span.setAttribute("knowledge_enhanced", true);
 
         const userMessage: Message = {
           id: Date.now(),
@@ -212,13 +221,37 @@ function AIAssistantPage() {
         setIsTyping(true);
 
         try {
-          // Simulate AI response for chat mode
-          setTimeout(() => {
-            const aiResponse = generateAIResponse(currentInput);
-            setMessages(prev => [...prev, aiResponse]);
-            setIsTyping(false);
-          }, 1500);
+          // Call the enhanced AI API with EvePass knowledge
+          const response = await fetch('/api/ai-response', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: currentInput,
+              conversationHistory: messages,
+              voiceEnabled: false, // For text chat mode
+              context: 'helpful'
+            }),
+          });
 
+          if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          const aiResponse: Message = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: data.text,
+            timestamp: new Date(),
+            suggestions: generateContextualSuggestions(currentInput),
+            venues: shouldShowVenues(currentInput) ? mockVenueRecommendations : undefined,
+            platformStats: data.platformStats
+          };
+
+          setMessages(prev => [...prev, aiResponse]);
           span.setAttribute("ai_response_success", true);
         } catch (error) {
           console.error('Failed to get AI response:', error);
@@ -227,70 +260,49 @@ function AIAssistantPage() {
           const errorMessage: Message = {
             id: Date.now() + 1,
             type: 'ai',
-            content: "I'm sorry, I'm having trouble connecting right now. Please try the voice widget or feel free to explore the app!",
+            content: "I'm having trouble connecting right now, but I can still help! Try asking about EvePass features, DrunkSafe™, venue discovery, or our social features. You can also try the voice widget!",
             timestamp: new Date(),
-            suggestions: ["Try voice widget", "Find venues", "Check safety features"]
+            suggestions: ["Try voice widget", "What is DrunkSafe?", "Find venues", "Social features"]
           };
 
           setMessages(prev => [...prev, errorMessage]);
-          setIsTyping(false);
           span.setAttribute("ai_response_success", false);
+        } finally {
+          setIsTyping(false);
         }
       }
     );
   };
 
-  const generateAIResponse = (userInput: string): Message => {
+  const generateContextualSuggestions = (userInput: string): string[] => {
     const input = userInput.toLowerCase();
     
-    if (input.includes('venue') || input.includes('club') || input.includes('bar')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "I found some great venues near you! Here are my top recommendations based on your location and preferences:",
-        timestamp: new Date(),
-        venues: mockVenueRecommendations,
-        suggestions: ["Book a table", "Add to night plan", "Get directions", "See more venues"]
-      };
+    if (input.includes('venue') || input.includes('club')) {
+      return ["Book a table", "Plan my night", "Check safety features", "Find similar venues"];
     }
     
-    if (input.includes('budget') || input.includes('money') || input.includes('spend')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "Let me help you manage your budget for tonight. Based on your spending history, I recommend setting a limit of £120 for a great night out. Would you like me to track your spending?",
-        timestamp: new Date(),
-        suggestions: ["Set budget limit", "View spending history", "Enable alerts", "Budget tips"]
-      };
+    if (input.includes('safe') || input.includes('drunk')) {
+      return ["Set up safety profile", "Emergency contacts", "Budget tracking", "Transport options"];
     }
     
-    if (input.includes('plan') || input.includes('itinerary')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "I'd love to help you plan the perfect night! Based on your preferences, I suggest starting with pre-drinks at a cocktail bar around 8 PM, then moving to a nightclub by 10:30 PM. Would you like me to create a detailed itinerary?",
-        timestamp: new Date(),
-        suggestions: ["Create night plan", "Find pre-drinks spot", "Book tables", "Set reminders"]
-      };
+    if (input.includes('plan') || input.includes('night')) {
+      return ["Find venues", "Set budget", "Add friends", "Check DrunkSafe"];
     }
     
-    if (input.includes('safe') || input.includes('safety') || input.includes('drunk')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "Safety is my top priority! I can help you stay safe with budget alerts, BAC monitoring, ride reminders, and emergency contacts. Your current safety status looks good. Would you like me to set up any safety features?",
-        timestamp: new Date(),
-        suggestions: ["Set up DrunkSafe", "Add emergency contacts", "Book return ride", "Safety tips"]
-      };
+    if (input.includes('bottle') || input.includes('share')) {
+      return ["Create bottle share", "Join existing share", "Split the bill", "Find social venues"];
     }
     
-    return {
-      id: Date.now(),
-      type: 'ai',
-      content: "I'm here to help with all your nightlife needs! I can assist with venue discovery, night planning, budget management, and safety features. What would you like to explore?",
-      timestamp: new Date(),
-      suggestions: ["Find venues", "Plan night", "Budget help", "Safety features"]
-    };
+    if (input.includes('song') || input.includes('music')) {
+      return ["Request a song", "Find music venues", "Check DJ lineup", "Explore genres"];
+    }
+    
+    return ["Find venues", "Plan night", "Safety features", "Social features"];
+  };
+
+  const shouldShowVenues = (userInput: string): boolean => {
+    const input = userInput.toLowerCase();
+    return input.includes('venue') || input.includes('club') || input.includes('bar') || input.includes('find');
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -305,9 +317,41 @@ function AIAssistantPage() {
     }
   };
 
+  const handleKnowledgeSearch = () => {
+    if (!knowledgeQuery.trim()) return;
+    
+    const results = EvePassKnowledgeService.searchKnowledge(knowledgeQuery);
+    setKnowledgeResults(results);
+  };
+
+  const handleKnowledgeInsert = (item: any) => {
+    let query = '';
+    
+    switch (item.type) {
+      case 'terminology':
+        query = `What is ${item.term}?`;
+        break;
+      case 'faq':
+        query = item.question;
+        break;
+      case 'feature':
+        query = `Tell me about ${item.feature.name}`;
+        break;
+      default:
+        query = knowledgeQuery;
+    }
+    
+    setInputValue(query);
+    setShowKnowledgeSearch(false);
+    setKnowledgeQuery('');
+    setKnowledgeResults([]);
+  };
+
+  const platformStats = EvePassKnowledgeService.getPlatformStats();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
-      {/* Header */}
+      {/* Enhanced Header with Knowledge Base Info */}
       <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-purple-500/20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -317,10 +361,19 @@ function AIAssistantPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white">Eve AI Assistant</h1>
-                <p className="text-sm text-gray-400">Your intelligent nightlife companion</p>
+                <p className="text-sm text-gray-400">Enhanced with complete EvePass knowledge base</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowKnowledgeSearch(!showKnowledgeSearch)}
+                className="text-gray-400 hover:text-white"
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Knowledge
+              </Button>
               <div className="flex items-center space-x-1">
                 {widgetMode === 'embedded' ? (
                   widgetLoaded ? (
@@ -337,7 +390,7 @@ function AIAssistantPage() {
                   {widgetMode === 'embedded' ? (
                     widgetLoaded ? 'Voice AI Ready' : 
                     widgetError ? 'Widget Error' : 'Loading Widget...'
-                  ) : 'Text Chat Ready'}
+                  ) : 'Enhanced Chat Ready'}
                 </span>
               </div>
               <Link href="/explore">
@@ -351,6 +404,93 @@ function AIAssistantPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Knowledge Search Panel */}
+        {showKnowledgeSearch && (
+          <Card className="bg-white/5 border-purple-500/20 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center">
+                <BookOpen className="h-5 w-5 mr-2 text-purple-400" />
+                EvePass Knowledge Base Search
+              </CardTitle>
+              <CardDescription className="text-gray-400">
+                Search through EvePass terminology, features, and FAQs
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="Search EvePass knowledge..."
+                  value={knowledgeQuery}
+                  onChange={(e) => setKnowledgeQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleKnowledgeSearch()}
+                  className="bg-white/10 border-purple-500/30 text-white placeholder:text-gray-400"
+                />
+                <Button onClick={handleKnowledgeSearch} className="bg-purple-600 hover:bg-purple-700">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {knowledgeResults.length > 0 && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {knowledgeResults.map((item, index) => (
+                    <div 
+                      key={index}
+                      onClick={() => handleKnowledgeInsert(item)}
+                      className="p-3 bg-white/10 rounded-lg border border-purple-500/30 cursor-pointer hover:bg-white/20 transition-colors"
+                    >
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Badge className="bg-purple-600/20 text-purple-300 text-xs">
+                          {item.type}
+                        </Badge>
+                        <span className="text-white font-medium text-sm">
+                          {item.type === 'terminology' ? item.term : 
+                           item.type === 'faq' ? item.question :
+                           item.feature?.name}
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-xs line-clamp-2">
+                        {item.type === 'terminology' ? item.definition :
+                         item.type === 'faq' ? item.answer :
+                         item.feature?.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Platform Stats Display */}
+        <Card className="bg-white/5 border-purple-500/20 mb-6">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Brain className="h-5 w-5 text-purple-400" />
+                <span className="text-white font-medium">EvePass Platform Stats</span>
+              </div>
+              <div className="flex items-center space-x-6 text-sm">
+                <div className="text-center">
+                  <div className="text-purple-400 font-bold">{platformStats.partnerVenues}</div>
+                  <div className="text-gray-400 text-xs">Partner Venues</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-green-400 font-bold">{platformStats.safetyScore}</div>
+                  <div className="text-gray-400 text-xs">Safety Score</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-yellow-400 font-bold">{platformStats.userRating}</div>
+                  <div className="text-gray-400 text-xs">User Rating</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-pink-400 font-bold">{platformStats.nightPlansCreated}</div>
+                  <div className="text-gray-400 text-xs">Night Plans</div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Mode Selection */}
         <Card className="bg-white/5 border-purple-500/20 mb-6">
           <CardContent className="p-4">
@@ -382,7 +522,7 @@ function AIAssistantPage() {
                   }
                 >
                   <Send className="h-4 w-4 mr-2" />
-                  Text Chat
+                  Enhanced Text Chat
                 </Button>
               </div>
             </div>
@@ -399,14 +539,14 @@ function AIAssistantPage() {
                   )}
                   <span>
                     {widgetLoaded ? 'Full voice conversation with ElevenLabs AI - speak naturally with Eve!' :
-                     widgetError ? 'Widget failed to load - try refreshing or use text chat' :
+                     widgetError ? 'Widget failed to load - try refreshing or use enhanced text chat' :
                      'Loading voice AI widget...'}
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="h-4 w-4 text-blue-400" />
-                  <span>Text-based chat with venue recommendations and suggestions</span>
+                  <span>Enhanced text chat with complete EvePass knowledge base, venue recommendations, and intelligent suggestions</span>
                 </div>
               )}
             </div>
@@ -447,7 +587,7 @@ function AIAssistantPage() {
                       variant="outline" 
                       className="border-blue-400 text-blue-400"
                     >
-                      Use Text Chat Instead
+                      Use Enhanced Text Chat Instead
                     </Button>
                   </div>
                 </div>
@@ -476,17 +616,17 @@ function AIAssistantPage() {
                         <li>• Natural voice conversations</li>
                         <li>• Real-time responses</li>
                         <li>• Context awareness</li>
-                        <li>• Memory of your chat</li>
+                        <li>• Complete EvePass knowledge</li>
                       </ul>
                     </div>
                     
                     <div className="p-4 bg-blue-500/20 rounded-lg border border-blue-500/30">
                       <h4 className="text-blue-400 font-medium mb-2">🎯 Try Asking</h4>
                       <ul className="text-sm text-gray-300 space-y-1">
+                        <li>• "What is DrunkSafe technology?"</li>
+                        <li>• "How does Share a Bottle work?"</li>
                         <li>• "Find me venues tonight"</li>
-                        <li>• "Help me plan my night"</li>
-                        <li>• "What safety features do you have?"</li>
-                        <li>• "Tell me about bottle sharing"</li>
+                        <li>• "Plan my perfect night out"</li>
                       </ul>
                     </div>
                   </div>
@@ -502,7 +642,7 @@ function AIAssistantPage() {
           </Card>
         )}
 
-        {/* Text Chat Mode */}
+        {/* Enhanced Text Chat Mode */}
         {widgetMode === 'chat' && (
           <>
             {/* Chat Messages */}
@@ -532,6 +672,30 @@ function AIAssistantPage() {
                           <CardContent className="p-4">
                             <p className="text-white">{message.content}</p>
                             
+                            {/* Platform Stats Display */}
+                            {message.platformStats && message.type === 'ai' && (
+                              <div className="mt-4 p-3 bg-purple-500/20 rounded-lg border border-purple-500/30">
+                                <h4 className="text-purple-400 font-medium mb-2 flex items-center">
+                                  <Brain className="h-4 w-4 mr-2" />
+                                  EvePass Platform Insights
+                                </h4>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div className="text-gray-300">
+                                    <span className="text-purple-400 font-medium">{message.platformStats.partnerVenues}</span> Partner Venues
+                                  </div>
+                                  <div className="text-gray-300">
+                                    <span className="text-green-400 font-medium">{message.platformStats.safetyScore}</span> Safety Score
+                                  </div>
+                                  <div className="text-gray-300">
+                                    <span className="text-yellow-400 font-medium">{message.platformStats.userRating}</span> User Rating
+                                  </div>
+                                  <div className="text-gray-300">
+                                    <span className="text-pink-400 font-medium">{message.platformStats.nightPlansCreated}</span> Night Plans
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             {/* Venue Recommendations */}
                             {message.venues && (
                               <div className="mt-4 space-y-3">
@@ -554,7 +718,7 @@ function AIAssistantPage() {
                               </div>
                             )}
                             
-                            {/* Suggestions */}
+                            {/* Enhanced Suggestions */}
                             {message.suggestions && (
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {message.suggestions.map((suggestion, index) => (
@@ -593,7 +757,7 @@ function AIAssistantPage() {
                       <CardContent className="p-4">
                         <div className="flex items-center space-x-2">
                           <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                          <span className="text-blue-400 text-sm">Eve is thinking...</span>
+                          <span className="text-blue-400 text-sm">Eve is thinking with enhanced knowledge...</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -604,7 +768,7 @@ function AIAssistantPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
+            {/* Enhanced Input Area */}
             <Card className="bg-white/5 border-purple-500/20 backdrop-blur-lg sticky bottom-4">
               <CardContent className="p-4">
                 <div className="flex items-center space-x-3">
@@ -613,7 +777,7 @@ function AIAssistantPage() {
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && !isTyping && handleSendMessage()}
-                      placeholder="Ask Eve anything about nightlife..."
+                      placeholder="Ask Eve anything about EvePass, nightlife, safety, or planning..."
                       className="bg-white/10 border-purple-500/30 text-white placeholder:text-gray-400"
                       disabled={isTyping}
                     />
@@ -631,8 +795,26 @@ function AIAssistantPage() {
                   </Button>
                 </div>
                 
-                {/* Quick Actions */}
+                {/* Enhanced Quick Actions */}
                 <div className="flex flex-wrap gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSuggestionClick("What is DrunkSafe technology?")}
+                    className="border-purple-400/50 text-purple-300 hover:bg-purple-400/20 text-xs"
+                  >
+                    <Shield className="h-3 w-3 mr-1" />
+                    DrunkSafe™
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSuggestionClick("How does Share a Bottle work?")}
+                    className="border-purple-400/50 text-purple-300 hover:bg-purple-400/20 text-xs"
+                  >
+                    <Wine className="h-3 w-3 mr-1" />
+                    Share a Bottle
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -645,7 +827,7 @@ function AIAssistantPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleSuggestionClick("Plan my night")}
+                    onClick={() => handleSuggestionClick("Plan my perfect night")}
                     className="border-purple-400/50 text-purple-300 hover:bg-purple-400/20 text-xs"
                   >
                     <Calendar className="h-3 w-3 mr-1" />
@@ -654,20 +836,11 @@ function AIAssistantPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleSuggestionClick("Check my budget")}
+                    onClick={() => handleSuggestionClick("How to request songs?")}
                     className="border-purple-400/50 text-purple-300 hover:bg-purple-400/20 text-xs"
                   >
-                    <CreditCard className="h-3 w-3 mr-1" />
-                    Budget Help
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleSuggestionClick("Safety tips")}
-                    className="border-purple-400/50 text-purple-300 hover:bg-purple-400/20 text-xs"
-                  >
-                    <Navigation className="h-3 w-3 mr-1" />
-                    Safety
+                    <Music className="h-3 w-3 mr-1" />
+                    Song Requests
                   </Button>
                 </div>
               </CardContent>
@@ -675,29 +848,29 @@ function AIAssistantPage() {
           </>
         )}
 
-        {/* Feature Showcase */}
+        {/* Enhanced Feature Showcase */}
         <div className="mt-8 grid md:grid-cols-3 gap-6">
           <Card className="bg-white/5 border-purple-500/20">
             <CardContent className="p-6 text-center">
-              <MapPin className="h-8 w-8 text-purple-400 mx-auto mb-3" />
-              <h3 className="text-white font-medium mb-2">Venue Discovery</h3>
-              <p className="text-gray-400 text-sm">Find the perfect spots for your night out</p>
+              <Shield className="h-8 w-8 text-purple-400 mx-auto mb-3" />
+              <h3 className="text-white font-medium mb-2">DrunkSafe™ Technology</h3>
+              <p className="text-gray-400 text-sm">AI-powered BAC monitoring with 98% safety score</p>
             </CardContent>
           </Card>
           
           <Card className="bg-white/5 border-blue-500/20">
             <CardContent className="p-6 text-center">
-              <Calendar className="h-8 w-8 text-blue-400 mx-auto mb-3" />
-              <h3 className="text-white font-medium mb-2">Night Planning</h3>
-              <p className="text-gray-400 text-sm">Create the perfect itinerary with Eve's help</p>
+              <Users className="h-8 w-8 text-blue-400 mx-auto mb-3" />
+              <h3 className="text-white font-medium mb-2">Social Features</h3>
+              <p className="text-gray-400 text-sm">Share bottles, split bills, and connect with others</p>
             </CardContent>
           </Card>
           
           <Card className="bg-white/5 border-green-500/20">
             <CardContent className="p-6 text-center">
-              <Navigation className="h-8 w-8 text-green-400 mx-auto mb-3" />
-              <h3 className="text-white font-medium mb-2">Safety First</h3>
-              <p className="text-gray-400 text-sm">DrunkSafe™ keeps you protected all night</p>
+              <Brain className="h-8 w-8 text-green-400 mx-auto mb-3" />
+              <h3 className="text-white font-medium mb-2">Complete Knowledge Base</h3>
+              <p className="text-gray-400 text-sm">Enhanced with all EvePass features and workflows</p>
             </CardContent>
           </Card>
         </div>
