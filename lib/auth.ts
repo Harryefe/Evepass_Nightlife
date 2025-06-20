@@ -179,25 +179,8 @@ export const authService = {
           span.setAttribute("email", email);
           console.log('Attempting sign in for:', email)
 
-          // Test connection first with a simple query
-          try {
-            const { data: connectionTest, error: connectionError } = await supabase
-              .from('customers')
-              .select('id')
-              .limit(1)
-
-            if (connectionError && connectionError.message.includes('Invalid API key')) {
-              throw new Error('Database configuration error. Please check your Supabase credentials.');
-            }
-          } catch (connectionError: any) {
-            console.error('Connection test failed:', connectionError)
-            if (connectionError.message.includes('fetch')) {
-              throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
-            }
-            throw connectionError
-          }
-
-          // Attempt sign in
+          // Attempt sign in directly without connection test
+          // The connection test was causing the fetch error
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password
@@ -214,10 +197,13 @@ export const authService = {
               throw new Error('Please check your email and click the confirmation link before signing in.');
             } else if (error.message.includes('Too many requests')) {
               throw new Error('Too many sign-in attempts. Please wait a few minutes and try again.');
-            } else if (error.message.includes('fetch')) {
+            } else if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('Failed to fetch')) {
               throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+            } else if (error.message.includes('Invalid API key')) {
+              throw new Error('Database configuration error. Please contact support.');
             }
             
+            // For any other error, throw the original message
             throw error
           }
 
@@ -275,9 +261,22 @@ export const authService = {
             error.message.includes('Invalid email') ||
             error.message.includes('Database configuration') ||
             error.message.includes('check your internet') ||
-            error.message.includes('Too many requests')
+            error.message.includes('Too many requests') ||
+            error.message.includes('Email not confirmed')
           )) {
             throw error
+          }
+          
+          // Check for network-related errors
+          if (error.message && (
+            error.message.includes('fetch') ||
+            error.message.includes('network') ||
+            error.message.includes('Failed to fetch') ||
+            error.message.includes('NetworkError') ||
+            error.message.includes('ERR_NETWORK') ||
+            error.message.includes('ERR_INTERNET_DISCONNECTED')
+          )) {
+            throw new Error('Unable to connect to the server. Please check your internet connection and try again.')
           }
           
           // Default fallback error

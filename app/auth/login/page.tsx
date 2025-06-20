@@ -32,6 +32,8 @@ export default function LoginPage() {
   // Test connection function
   const testConnection = async () => {
     setConnectionStatus('testing');
+    setError('');
+    
     try {
       const result = await testSupabaseConnection();
       if (result.success) {
@@ -79,6 +81,11 @@ export default function LoginPage() {
       }
       
       setError(errorMessage);
+      
+      // Update connection status if it's a network error
+      if (errorMessage.includes('Unable to connect') || errorMessage.includes('internet connection')) {
+        setConnectionStatus('failed');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +190,7 @@ export default function LoginPage() {
                     variant="ghost"
                     size="sm"
                     onClick={testConnection}
-                    disabled={connectionStatus === 'testing'}
+                    disabled={connectionStatus === 'testing' || isLoading}
                     className="text-xs"
                   >
                     Test Connection

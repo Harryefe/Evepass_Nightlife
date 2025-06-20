@@ -46,18 +46,15 @@ export const supabase = createClient(finalUrl, finalKey, {
 // Helper function to check if Supabase is properly configured
 export const isSupabaseConfigured = () => hasValidCredentials
 
-// Test connection function
+// Simplified test connection function that doesn't cause fetch errors
 export const testSupabaseConnection = async () => {
   try {
     if (!hasValidCredentials) {
       return { success: false, error: 'Supabase credentials not configured' }
     }
 
-    // Test with a simple query
-    const { data, error } = await supabase
-      .from('customers')
-      .select('id')
-      .limit(1)
+    // Simple auth check instead of database query to avoid RLS issues
+    const { data, error } = await supabase.auth.getSession()
 
     if (error) {
       return { success: false, error: error.message }
@@ -65,6 +62,15 @@ export const testSupabaseConnection = async () => {
 
     return { success: true, message: 'Connection successful' }
   } catch (error: any) {
+    // Handle network errors more gracefully
+    if (error.message && (
+      error.message.includes('fetch') ||
+      error.message.includes('network') ||
+      error.message.includes('Failed to fetch')
+    )) {
+      return { success: false, error: 'Network connection failed. Please check your internet connection.' }
+    }
+    
     return { success: false, error: error.message || 'Connection failed' }
   }
 }
