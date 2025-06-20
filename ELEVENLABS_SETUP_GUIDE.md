@@ -1,226 +1,160 @@
-# 🎤 ElevenLabs API Setup Guide - Step by Step
+# 🎤 ElevenLabs API Setup Guide - UPDATED
 
-## 📋 **What You Need:**
-- An ElevenLabs account (free tier available)
-- 5 minutes to set up
-- Your API key (I'll show you exactly how to get it)
+## ✅ **Your New API Key is Configured!**
 
----
-
-## 🚀 **Step 1: Create Your ElevenLabs Account**
-
-### **1.1 Go to ElevenLabs Website**
-- Open your browser and go to: **https://elevenlabs.io**
-- Click the **"Sign Up"** button in the top right corner
-
-### **1.2 Choose Your Signup Method**
-- **Option A**: Sign up with Google (fastest)
-- **Option B**: Sign up with email and create a password
-- **Option C**: Sign up with GitHub
-
-### **1.3 Verify Your Account**
-- Check your email for a verification link
-- Click the verification link to activate your account
-
----
-
-## 🔑 **Step 2: Get Your API Key (CRITICAL STEP)**
-
-### **2.1 Access Your Profile**
-- Once logged in, look for your **profile picture** or **avatar** in the top right corner
-- Click on it to open the dropdown menu
-
-### **2.2 Navigate to API Settings**
-- In the dropdown menu, click **"Profile"** or **"Settings"**
-- Look for a tab or section called **"API Keys"** or **"Developer"**
-- If you don't see it immediately, look for a **"API"** link in the left sidebar
-
-### **2.3 Generate Your API Key**
-- Click the **"Create API Key"** or **"Generate New Key"** button
-- Give your key a name like "Evepass Nightlife App"
-- **IMPORTANT**: Copy the key immediately - you won't be able to see it again!
-
-### **2.4 Your API Key Format**
-Your API key should look like this:
+Your fresh ElevenLabs API key has been updated:
 ```
-sk_1234567890abcdef1234567890abcdef1234567890abcdef
-```
-- It ALWAYS starts with `sk_`
-- It's about 50+ characters long
-- Contains letters and numbers
-
----
-
-## 🔧 **Step 3: Configure Your API Key**
-
-### **3.1 Add to Environment Variables**
-I've already added your API key to the `.env.local` file:
-```env
-ELEVENLABS_API_KEY=sk_c40f269b802b8b90a063e0fcf0c02846a6a91677d0b05b50
+sk_c53c05c01141a4ec985fc7850cd2a06a3d4964e1e653a802
 ```
 
-### **3.2 Verify the Key Format**
-✅ **Correct format**: `sk_c40f269b802b8b90a063e0fcf0c02846a6a91677d0b05b50`
-❌ **Wrong format**: Missing `sk_` prefix or too short
-
 ---
 
-## 🧪 **Step 4: Test Your Connection**
+## 🚀 **Quick Test Instructions**
 
-### **4.1 Restart Your Development Server**
+### **Step 1: Restart Your Development Server**
 ```bash
-# Stop your current server (Ctrl+C)
-# Then restart it
+# Stop your current server (Ctrl+C if running)
 npm run dev
 ```
 
-### **4.2 Test Eve AI Voice**
+### **Step 2: Test Eve AI Voice**
 1. Go to your app: `http://localhost:3000`
-2. Sign in as a customer
+2. **Sign in as a customer** (this is required!)
 3. Navigate to **"AI Assistant"** page
-4. Make sure the **voice toggle** is ON (speaker icon should be purple)
-5. Send a message like "Hello Eve"
-6. You should hear Eve's voice response!
+4. Look for the **voice status indicator** in the header:
+   - 🟢 **"Voice Ready"** = Working perfectly!
+   - 🔴 **"Voice Unavailable"** = API key issue
+   - 🔵 **"Testing Voice..."** = Still connecting
+
+### **Step 3: Try Voice Features**
+1. Make sure the **voice toggle is ON** (purple speaker icon)
+2. Send a message like **"Hello Eve"**
+3. You should hear Eve's voice response!
 
 ---
 
-## 🔍 **Step 5: Troubleshooting**
+## 🔍 **Real-Time Status Monitoring**
 
-### **5.1 If Voice Doesn't Work**
+Your AI Assistant now shows live connection status:
 
-**Check Browser Console:**
-1. Press `F12` to open developer tools
-2. Go to the **"Console"** tab
-3. Look for any red error messages
-4. Common errors and solutions:
+### **Connection Indicators:**
+- ✅ **Green checkmark** = ElevenLabs connected and ready
+- ❌ **Red X** = Connection failed or API key issue
+- 🔄 **Spinning loader** = Testing connection
+- ❓ **Gray question mark** = Status unknown
 
-**Error: "ElevenLabs API key not configured"**
-- ✅ **Solution**: Make sure your API key is in `.env.local` and starts with `sk_`
-
-**Error: "Invalid API key"**
-- ✅ **Solution**: Double-check you copied the full API key from ElevenLabs
-- ✅ **Solution**: Generate a new API key if needed
-
-**Error: "Quota exceeded"**
-- ✅ **Solution**: You've used your free monthly characters. Check your ElevenLabs dashboard
-
-### **5.2 Check Your ElevenLabs Dashboard**
-
-**Monitor Usage:**
-1. Go to https://elevenlabs.io
-2. Sign in to your account
-3. Look for **"Usage"** or **"Billing"** in the sidebar
-4. Check your character usage vs. limit
-
-**Free Tier Limits:**
-- **10,000 characters per month** (about 15-20 minutes of speech)
-- **3 custom voices**
-- **High-quality audio**
+### **Voice Settings Panel:**
+- Choose between different Eve personalities
+- Real-time connection status
+- Error messages if something goes wrong
 
 ---
 
-## 📊 **Step 6: Understanding Your Limits**
+## 🎯 **Test Commands to Try**
 
-### **6.1 Free Tier (Perfect for Testing)**
-- ✅ 10,000 characters/month
-- ✅ All voice models
-- ✅ Commercial use allowed
-- ✅ High-quality audio
+Once connected, test these messages:
 
-### **6.2 Character Usage Examples**
-- "Hello, how are you?" = ~18 characters
-- A typical Eve AI response = ~100-300 characters
-- You can get ~30-100 voice responses per month on free tier
-
-### **6.3 Upgrade Options (If Needed Later)**
-- **Starter**: $5/month - 30,000 characters
-- **Creator**: $22/month - 100,000 characters
-- **Pro**: $99/month - 500,000 characters
-
----
-
-## ✅ **Step 7: Verification Checklist**
-
-Before testing, make sure:
-
-- [ ] ✅ ElevenLabs account created and verified
-- [ ] ✅ API key generated and copied
-- [ ] ✅ API key added to `.env.local` file
-- [ ] ✅ API key starts with `sk_`
-- [ ] ✅ Development server restarted
-- [ ] ✅ Signed in as a customer in the app
-- [ ] ✅ Voice toggle is enabled (purple speaker icon)
-
----
-
-## 🎯 **Step 8: Test Commands**
-
-Try these messages to test Eve AI voice:
-
-1. **"Hello Eve"** - Simple greeting
-2. **"Find venues near me"** - Venue recommendation
+1. **"Hello Eve"** - Simple greeting with voice
+2. **"Find venues near me"** - Venue recommendations
 3. **"Help me plan my night"** - Planning assistance
 4. **"What safety features do you have?"** - DrunkSafe info
+5. **"Tell me about bottle sharing"** - Social features
 
 ---
 
-## 🚨 **Common Issues & Solutions**
+## 🔧 **Troubleshooting Your New Key**
 
-### **Issue 1: "Unable to connect to ElevenLabs"**
-**Solutions:**
-1. Check your internet connection
-2. Verify API key is correct
-3. Check ElevenLabs service status: https://status.elevenlabs.io
+### **If Voice Still Doesn't Work:**
 
-### **Issue 2: "Voice not playing"**
-**Solutions:**
-1. Check browser audio permissions
-2. Make sure volume is up
-3. Try a different browser
-4. Check if audio is blocked by browser
+**1. Check Browser Console (F12 → Console):**
+- Look for any red error messages
+- Common errors and solutions below
 
-### **Issue 3: "Quota exceeded"**
-**Solutions:**
-1. Check your ElevenLabs dashboard usage
-2. Wait for monthly reset
-3. Consider upgrading your plan
+**2. Test Connection Button:**
+- Click "Test Connection" in the AI Assistant header
+- This will show you exactly what's wrong
 
-### **Issue 4: "API key invalid"**
-**Solutions:**
-1. Regenerate a new API key
-2. Make sure you copied the entire key
-3. Check for extra spaces in `.env.local`
+**3. Check Your ElevenLabs Dashboard:**
+- Go to https://elevenlabs.io
+- Sign in and check your usage/quota
 
 ---
 
-## 🎉 **Success Indicators**
+## 🚨 **Common Error Solutions**
+
+### **Error: "ElevenLabs API key not configured"**
+✅ **Solution**: Restart your dev server - the new key should work
+
+### **Error: "Invalid API key"**
+✅ **Solution**: Your key might be restricted. Check ElevenLabs dashboard permissions
+
+### **Error: "Quota exceeded"**
+✅ **Solution**: Check your monthly character usage in ElevenLabs dashboard
+
+### **Error: "Network error"**
+✅ **Solution**: Check your internet connection and try again
+
+---
+
+## 📊 **Your ElevenLabs Account Info**
+
+### **Free Tier Includes:**
+- ✅ **10,000 characters/month** (about 15-20 minutes of speech)
+- ✅ **All voice models** including the latest
+- ✅ **Commercial use** allowed
+- ✅ **High-quality audio** (44.1kHz)
+
+### **Character Usage Examples:**
+- "Hello, how are you?" = ~18 characters
+- Typical Eve AI response = ~100-300 characters
+- You can get ~30-100 voice responses per month
+
+---
+
+## 🎉 **Success Checklist**
 
 You'll know it's working when:
-- ✅ Eve AI responds with text AND voice
-- ✅ You hear clear, natural speech
-- ✅ No error messages in browser console
-- ✅ Voice settings panel appears in AI Assistant
+- [ ] ✅ Voice status shows "Voice Ready" (green checkmark)
+- [ ] ✅ Eve responds with both text AND voice
+- [ ] ✅ You can hear clear, natural speech
+- [ ] ✅ No error messages in browser console
+- [ ] ✅ Voice settings panel appears with personality options
 
 ---
 
-## 📞 **Need Help?**
+## 🔐 **Security Best Practices**
 
-If you're still having issues:
-
-1. **Check the browser console** (F12 → Console tab)
-2. **Copy any error messages** you see
-3. **Check your ElevenLabs dashboard** for usage/errors
-4. **Try generating a new API key** if the current one doesn't work
+- ✅ **Never share your API key** publicly or in screenshots
+- ✅ **Don't commit `.env.local`** to version control
+- ✅ **Monitor usage** regularly in ElevenLabs dashboard
+- ✅ **Regenerate keys** if you suspect they're compromised
 
 ---
 
-## 🔐 **Security Notes**
+## 📞 **Still Need Help?**
 
-- ✅ **Never share your API key publicly**
-- ✅ **Don't commit `.env.local` to version control**
-- ✅ **Regenerate keys if compromised**
-- ✅ **Monitor usage regularly**
+If you're still having issues after restarting:
+
+1. **Check the voice status indicator** in AI Assistant header
+2. **Click "Test Connection"** to see detailed error info
+3. **Check browser console** (F12) for error messages
+4. **Verify your ElevenLabs account** is active and has quota remaining
 
 ---
 
-**Your API key is already configured! Just restart your dev server and test the AI Assistant page.** 🚀
+## 🎵 **Voice Personalities Available**
+
+Your app includes 4 different Eve personalities:
+
+1. **Eve Friendly** (Default) - Warm and conversational
+2. **Eve Professional** - Clear and authoritative  
+3. **Eve Energetic** - Upbeat and exciting
+4. **Eve Calm** - Soothing and relaxed
+
+Switch between them in the AI Assistant voice settings!
+
+---
+
+**Your new API key is ready to go! Just restart your dev server and test it out.** 🚀
+
+**Expected Result:** You should hear Eve's voice when you send messages in the AI Assistant! 🎤✨
