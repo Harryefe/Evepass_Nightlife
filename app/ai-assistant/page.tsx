@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   Bot, Send, Mic, MicOff, Volume2, VolumeX, 
@@ -13,7 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { VOICE_IDS } from '@/lib/elevenlabs';
+import { elevenLabsAgentService, ConversationSession } from '@/lib/elevenlabs-agent';
 import * as Sentry from '@sentry/nextjs';
 
 // Define interfaces for type safety
@@ -80,12 +79,15 @@ function AIAssistantPage() {
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [selectedVoice, setSelectedVoice] = useState(VOICE_IDS.EVE_FRIENDLY);
   const [isTyping, setIsTyping] = useState(false);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'testing' | 'connected' | 'failed'>('unknown');
+  const [conversationSession, setConversationSession] = useState<ConversationSession | null>(null);
+  const [useAgentMode, setUseAgentMode] = useState(true); // New toggle for agent vs text-to-speech
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -96,8 +98,8 @@ function AIAssistantPage() {
   }, [messages]);
 
   useEffect(() => {
-    // Test ElevenLabs connection on component mount
-    testElevenLabsConnection();
+    // Test connection and start conversation on component mount
+    initializeAgent();
   }, []);
 
   // Cleanup audio URLs when component unmounts
@@ -105,7 +107,7 @@ function AIAssistantPage() {
     return () => {
       messages.forEach(message => {
         if (message.audioUrl) {
-          URL.revokeObjectURL(message.audioUrl);
+          elevenLabsAgentService.cleanupAudioUrl(message.audioUrl);
         }
       });
       if (audioRef.current) {
@@ -115,26 +117,27 @@ function AIAssistantPage() {
     };
   }, []);
 
-  const testElevenLabsConnection = async () => {
+  const initializeAgent = async () => {
     setConnectionStatus('testing');
     
     try {
-      const response = await fetch('/api/test-elevenlabs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      // Test agent connection
+      const testResult = await elevenLabsAgentService.testAgentConnection();
       
-      const result = await response.json();
-      
-      if (result.success) {
+      if (testResult.success) {
         setConnectionStatus('connected');
+        
+        // Start conversation session
+        const session = await elevenLabsAgentService.startConversation(`user_${Date.now()}`);
+        setConversationSession(session);
+        console.log('Agent conversation started:', session);
       } else {
         setConnectionStatus('failed');
-        console.error('ElevenLabs connection failed:', result.error);
+        console.error('Agent connection failed:', testResult.error);
       }
     } catch (error) {
       setConnectionStatus('failed');
-      console.error('ElevenLabs connection test failed:', error);
+      console.error('Agent initialization failed:', error);
     }
   };
 
@@ -142,13 +145,14 @@ function AIAssistantPage() {
     return Sentry.startSpan(
       {
         op: "ui.click",
-        name: "Send AI Message",
+        name: "Send AI Agent Message",
       },
       async (span) => {
         if (!inputValue.trim()) return;
 
         span.setAttribute("message_length", inputValue.length);
         span.setAttribute("voice_enabled", voiceEnabled);
+        span.setAttribute("agent_mode", useAgentMode);
 
         const userMessage: Message = {
           id: Date.now(),
@@ -163,50 +167,78 @@ function AIAssistantPage() {
         setIsTyping(true);
 
         try {
-          // Send request to AI API
-          const response = await fetch('/api/ai-response', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: currentInput,
-              conversationHistory: messages,
-              voiceEnabled: voiceEnabled && connectionStatus === 'connected',
-              voiceId: selectedVoice,
-              context: determineContext(currentInput)
-            }),
-          });
+          if (useAgentMode && conversationSession && connectionStatus === 'connected') {
+            // Use ElevenLabs Conversational AI Agent
+            const agentResponse = await elevenLabsAgentService.sendMessage(
+              conversationSession.conversationId,
+              currentInput
+            );
 
-          if (!response.ok) {
-            throw new Error(`API request failed: ${response.statusText}`);
+            if (agentResponse.success) {
+              const aiMessage: Message = {
+                id: Date.now() + 1,
+                type: 'ai',
+                content: `Eve responded to: "${currentInput}"`, // We don't get text back from agent, just audio
+                timestamp: new Date(),
+                audioUrl: agentResponse.audioUrl,
+                suggestions: generateSuggestions(currentInput)
+              };
+
+              setMessages(prev => [...prev, aiMessage]);
+              
+              // Auto-play the agent's voice response
+              if (agentResponse.audioUrl && voiceEnabled) {
+                setTimeout(() => playAudio(aiMessage.id, agentResponse.audioUrl!), 500);
+              }
+
+              span.setAttribute("agent_response_success", true);
+            } else {
+              throw new Error(agentResponse.error || 'Agent response failed');
+            }
+          } else {
+            // Fallback to text-based AI response
+            const response = await fetch('/api/ai-response', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: currentInput,
+                conversationHistory: messages,
+                voiceEnabled: voiceEnabled && connectionStatus === 'connected',
+                context: determineContext(currentInput)
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`API request failed: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            const aiResponse: Message = {
+              id: Date.now() + 1,
+              type: 'ai',
+              content: data.text,
+              timestamp: new Date(),
+              audioUrl: data.audioUrl,
+              suggestions: generateSuggestions(data.text),
+              venues: shouldShowVenues(data.text) ? mockVenueRecommendations : undefined
+            };
+
+            setMessages(prev => [...prev, aiResponse]);
+            
+            // Auto-play voice response if available
+            if (data.audioUrl && voiceEnabled && connectionStatus === 'connected') {
+              setTimeout(() => playAudio(aiResponse.id, data.audioUrl), 500);
+            }
+
+            span.setAttribute("ai_response_success", true);
           }
-
-          const data = await response.json();
-          
-          if (data.error) {
-            throw new Error(data.error);
-          }
-
-          const aiResponse: Message = {
-            id: Date.now() + 1,
-            type: 'ai',
-            content: data.text,
-            timestamp: new Date(),
-            audioUrl: data.audioUrl,
-            suggestions: generateSuggestions(data.text),
-            venues: shouldShowVenues(data.text) ? mockVenueRecommendations : undefined
-          };
-
-          setMessages(prev => [...prev, aiResponse]);
-          
-          // Auto-play voice response if available
-          if (data.audioUrl && voiceEnabled && connectionStatus === 'connected') {
-            setTimeout(() => playAudio(aiResponse.id, data.audioUrl), 500);
-          }
-
-          span.setAttribute("ai_response_success", true);
-          span.setAttribute("has_audio", !!data.audioUrl);
         } catch (error) {
           console.error('Failed to get AI response:', error);
           Sentry.captureException(error);
@@ -226,6 +258,85 @@ function AIAssistantPage() {
         }
       }
     );
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        
+        if (conversationSession && useAgentMode) {
+          setIsTyping(true);
+          
+          try {
+            const agentResponse = await elevenLabsAgentService.sendMessage(
+              conversationSession.conversationId,
+              '', // No text, just audio
+              audioBlob
+            );
+
+            if (agentResponse.success) {
+              const userMessage: Message = {
+                id: Date.now(),
+                type: 'user',
+                content: '[Voice message]',
+                timestamp: new Date()
+              };
+
+              const aiMessage: Message = {
+                id: Date.now() + 1,
+                type: 'ai',
+                content: 'Eve responded to your voice message',
+                timestamp: new Date(),
+                audioUrl: agentResponse.audioUrl
+              };
+
+              setMessages(prev => [...prev, userMessage, aiMessage]);
+              
+              if (agentResponse.audioUrl && voiceEnabled) {
+                setTimeout(() => playAudio(aiMessage.id, agentResponse.audioUrl!), 500);
+              }
+            }
+          } catch (error) {
+            console.error('Voice message failed:', error);
+          } finally {
+            setIsTyping(false);
+          }
+        }
+        
+        // Cleanup
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleListening = () => {
+    if (isRecording) {
+      stopVoiceRecording();
+    } else {
+      startVoiceRecording();
+    }
   };
 
   const determineContext = (message: string): string => {
@@ -294,7 +405,7 @@ function AIAssistantPage() {
             setMessages(prev => prev.map(msg => ({ ...msg, isPlaying: false })));
             audioRef.current = null;
             // Cleanup the blob URL
-            URL.revokeObjectURL(audioUrl);
+            elevenLabsAgentService.cleanupAudioUrl(audioUrl);
           };
 
           audio.onerror = (error) => {
@@ -330,11 +441,6 @@ function AIAssistantPage() {
     setInputValue(suggestion);
   };
 
-  const toggleListening = () => {
-    setIsListening(!isListening);
-    // In a real app, this would start/stop speech recognition
-  };
-
   const getConnectionStatusIcon = () => {
     switch (connectionStatus) {
       case 'connected':
@@ -349,15 +455,28 @@ function AIAssistantPage() {
   };
 
   const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return 'Voice Ready';
-      case 'failed':
-        return 'Voice Unavailable';
-      case 'testing':
-        return 'Testing Voice...';
-      default:
-        return 'Voice Status Unknown';
+    if (useAgentMode) {
+      switch (connectionStatus) {
+        case 'connected':
+          return 'Eve Agent Ready';
+        case 'failed':
+          return 'Agent Unavailable';
+        case 'testing':
+          return 'Connecting to Eve...';
+        default:
+          return 'Agent Status Unknown';
+      }
+    } else {
+      switch (connectionStatus) {
+        case 'connected':
+          return 'Voice Ready';
+        case 'failed':
+          return 'Voice Unavailable';
+        case 'testing':
+          return 'Testing Voice...';
+        default:
+          return 'Voice Status Unknown';
+      }
     }
   };
 
@@ -388,7 +507,7 @@ function AIAssistantPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={testElevenLabsConnection}
+                onClick={initializeAgent}
                 className="text-xs"
               >
                 {getConnectionStatusIcon()}
@@ -405,35 +524,49 @@ function AIAssistantPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Voice Settings */}
+        {/* Agent Settings */}
         {voiceEnabled && (
           <Card className="bg-white/5 border-purple-500/20 mb-6">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Volume2 className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm text-white">Voice Settings</span>
+                  <Bot className="h-4 w-4 text-purple-400" />
+                  <span className="text-sm text-white">Eve AI Agent</span>
                   {getConnectionStatusIcon()}
                   <span className="text-xs text-gray-400">{getConnectionStatusText()}</span>
                 </div>
-                <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                  <SelectTrigger className="w-48 bg-white/10 border-purple-500/30 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={VOICE_IDS.EVE_FRIENDLY}>Eve Friendly</SelectItem>
-                    <SelectItem value={VOICE_IDS.EVE_DEFAULT}>Eve Professional</SelectItem>
-                    <SelectItem value={VOICE_IDS.EVE_ENERGETIC}>Eve Energetic</SelectItem>
-                    <SelectItem value={VOICE_IDS.EVE_CALM}>Eve Calm</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center space-x-3">
+                  <label className="flex items-center space-x-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useAgentMode}
+                      onChange={(e) => setUseAgentMode(e.target.checked)}
+                      className="rounded"
+                    />
+                    <span className="text-gray-300">Use Conversational AI</span>
+                  </label>
+                </div>
               </div>
               
               {connectionStatus === 'failed' && (
                 <div className="mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
                   <div className="flex items-center space-x-2 text-red-400 text-sm">
                     <AlertCircle className="h-4 w-4" />
-                    <span>Voice features unavailable. Check your ElevenLabs API configuration.</span>
+                    <span>
+                      {useAgentMode 
+                        ? 'Conversational AI unavailable. Check your ElevenLabs agent configuration.'
+                        : 'Voice features unavailable. Check your ElevenLabs API configuration.'
+                      }
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {connectionStatus === 'connected' && useAgentMode && conversationSession && (
+                <div className="mt-3 p-3 bg-green-500/20 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center space-x-2 text-green-400 text-sm">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Connected to Eve AI Agent - Full conversational experience enabled!</span>
                   </div>
                 </div>
               )}
@@ -574,10 +707,11 @@ function AIAssistantPage() {
                   variant="ghost"
                   onClick={toggleListening}
                   className={`absolute right-2 top-1/2 transform -translate-y-1/2 ${
-                    isListening ? 'text-red-400' : 'text-gray-400'
+                    isRecording ? 'text-red-400' : 'text-gray-400'
                   }`}
+                  disabled={!useAgentMode || connectionStatus !== 'connected'}
                 >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </Button>
               </div>
               <Button

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenLabsService } from '@/lib/elevenlabs';
+import { elevenLabsAgentService } from '@/lib/elevenlabs-agent';
 import * as Sentry from '@sentry/nextjs';
 
 export async function POST(request: NextRequest) {
@@ -10,24 +11,67 @@ export async function POST(request: NextRequest) {
     },
     async (span) => {
       try {
-        console.log('Testing ElevenLabs connection...');
+        console.log('Testing ElevenLabs services...');
         
-        const result = await elevenLabsService.testConnection();
+        // Test both text-to-speech and agent services
+        const [ttsResult, agentResult] = await Promise.allSettled([
+          elevenLabsService.testConnection(),
+          elevenLabsAgentService.testAgentConnection()
+        ]);
         
-        span.setAttribute("test_success", result.success);
+        const ttsSuccess = ttsResult.status === 'fulfilled' && ttsResult.value.success;
+        const agentSuccess = agentResult.status === 'fulfilled' && agentResult.value.success;
         
-        if (result.success) {
-          console.log('ElevenLabs connection test successful:', result.info);
+        span.setAttribute("tts_success", ttsSuccess);
+        span.setAttribute("agent_success", agentSuccess);
+        
+        if (agentSuccess) {
+          console.log('ElevenLabs agent connection successful');
           return NextResponse.json({
             success: true,
-            message: 'ElevenLabs connection successful',
-            info: result.info
+            message: 'ElevenLabs Conversational AI Agent connected successfully',
+            services: {
+              agent: {
+                success: true,
+                info: agentResult.status === 'fulfilled' ? agentResult.value.info : null
+              },
+              textToSpeech: {
+                success: ttsSuccess,
+                info: ttsResult.status === 'fulfilled' ? ttsResult.value.info : null
+              }
+            }
+          });
+        } else if (ttsSuccess) {
+          console.log('ElevenLabs TTS connection successful, agent failed');
+          return NextResponse.json({
+            success: true,
+            message: 'ElevenLabs Text-to-Speech connected (Agent unavailable)',
+            services: {
+              agent: {
+                success: false,
+                error: agentResult.status === 'fulfilled' ? agentResult.value.error : 'Agent test failed'
+              },
+              textToSpeech: {
+                success: true,
+                info: ttsResult.status === 'fulfilled' ? ttsResult.value.info : null
+              }
+            }
           });
         } else {
-          console.error('ElevenLabs connection test failed:', result.error);
+          console.error('Both ElevenLabs services failed');
           return NextResponse.json({
             success: false,
-            error: result.error
+            error: 'Both ElevenLabs services unavailable',
+            services: {
+              agent: {
+                success: false,
+                error: agentResult.status === 'fulfilled' ? agentResult.value.error : 'Agent test failed'
+              },
+              textToSpeech: {
+                success: false,
+                error: ttsResult.status === 'fulfilled' ? ttsResult.value.error : 'TTS test failed'
+              }
+            }
           });
         }
       } catch (error) {
