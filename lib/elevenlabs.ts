@@ -31,13 +31,19 @@ export interface ElevenLabsResponse {
 export const elevenLabsService = {
   // Check if ElevenLabs is properly configured
   isConfigured(): boolean {
-    return !!ELEVENLABS_API_KEY && ELEVENLABS_API_KEY.startsWith('sk_')
+    const isConfigured = !!ELEVENLABS_API_KEY && ELEVENLABS_API_KEY.startsWith('sk_')
+    console.log('ElevenLabs configuration check:', {
+      hasApiKey: !!ELEVENLABS_API_KEY,
+      keyFormat: ELEVENLABS_API_KEY ? `${ELEVENLABS_API_KEY.substring(0, 5)}...` : 'none',
+      isConfigured
+    })
+    return isConfigured
   },
 
   // Generate speech from text using ElevenLabs
   async generateSpeech(
     text: string,
-    voiceId: VoiceId = VOICE_IDS.EVE_DEFAULT,
+    voiceId: VoiceId = VOICE_IDS.EVE_FRIENDLY,
     settings: VoiceSettings = {
       stability: 0.5,
       similarity_boost: 0.75,
@@ -54,8 +60,13 @@ export const elevenLabsService = {
         try {
           // Check configuration
           if (!this.isConfigured()) {
-            const error = 'ElevenLabs API key not configured'
+            const error = 'ElevenLabs API key not configured or invalid format'
             span.setAttribute("error", error)
+            console.error('ElevenLabs configuration error:', {
+              hasKey: !!ELEVENLABS_API_KEY,
+              keyLength: ELEVENLABS_API_KEY?.length || 0,
+              startsWithSk: ELEVENLABS_API_KEY?.startsWith('sk_') || false
+            })
             return { success: false, error }
           }
 
@@ -80,40 +91,68 @@ export const elevenLabsService = {
           console.log('Generating speech with ElevenLabs:', {
             textLength: text.length,
             voiceId,
-            settings
+            settings,
+            apiKeyPresent: !!ELEVENLABS_API_KEY,
+            apiKeyFormat: ELEVENLABS_API_KEY ? `${ELEVENLABS_API_KEY.substring(0, 8)}...` : 'none'
           })
 
           // Make request to ElevenLabs API
-          const response = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}`, {
+          const requestUrl = `${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}`
+          const requestBody = {
+            text: text.trim(),
+            model_id: 'eleven_turbo_v2_5', // Fast, high-quality model
+            voice_settings: {
+              stability: settings.stability,
+              similarity_boost: settings.similarity_boost,
+              style: settings.style,
+              use_speaker_boost: settings.use_speaker_boost
+            }
+          }
+
+          console.log('Making ElevenLabs API request:', {
+            url: requestUrl,
+            bodySize: JSON.stringify(requestBody).length,
+            headers: {
+              'Accept': 'audio/mpeg',
+              'Content-Type': 'application/json',
+              'xi-api-key': ELEVENLABS_API_KEY ? `${ELEVENLABS_API_KEY.substring(0, 8)}...` : 'none'
+            }
+          })
+
+          const response = await fetch(requestUrl, {
             method: 'POST',
             headers: {
               'Accept': 'audio/mpeg',
               'Content-Type': 'application/json',
               'xi-api-key': ELEVENLABS_API_KEY!
             },
-            body: JSON.stringify({
-              text: text.trim(),
-              model_id: 'eleven_turbo_v2_5', // Fast, high-quality model
-              voice_settings: {
-                stability: settings.stability,
-                similarity_boost: settings.similarity_boost,
-                style: settings.style,
-                use_speaker_boost: settings.use_speaker_boost
-              }
-            })
+            body: JSON.stringify(requestBody)
           })
 
           span.setAttribute("api_status", response.status)
+          console.log('ElevenLabs API response:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+          })
 
           if (!response.ok) {
-            let errorMessage = `ElevenLabs API error: ${response.status}`
+            let errorMessage = `ElevenLabs API error: ${response.status} ${response.statusText}`
             
             try {
-              const errorData = await response.json()
-              errorMessage = errorData.detail?.message || errorData.message || errorMessage
+              const errorText = await response.text()
+              console.error('ElevenLabs API error response:', errorText)
+              
+              // Try to parse as JSON
+              try {
+                const errorData = JSON.parse(errorText)
+                errorMessage = errorData.detail?.message || errorData.message || errorMessage
+              } catch (e) {
+                // If not JSON, use the raw text
+                errorMessage = errorText || errorMessage
+              }
             } catch (e) {
-              // If we can't parse the error, use the status text
-              errorMessage = `${errorMessage} - ${response.statusText}`
+              console.error('Failed to read error response:', e)
             }
 
             span.setAttribute("error", errorMessage)
@@ -123,6 +162,17 @@ export const elevenLabsService = {
 
           // Convert response to blob and create URL
           const audioBlob = await response.blob()
+          console.log('Audio blob created:', {
+            size: audioBlob.size,
+            type: audioBlob.type
+          })
+
+          if (audioBlob.size === 0) {
+            const error = 'Received empty audio response from ElevenLabs'
+            span.setAttribute("error", error)
+            return { success: false, error }
+          }
+
           const audioUrl = URL.createObjectURL(audioBlob)
           
           // Estimate duration (rough calculation: ~150 words per minute)
@@ -135,7 +185,9 @@ export const elevenLabsService = {
 
           console.log('Speech generated successfully:', {
             audioSize: audioBlob.size,
-            estimatedDuration: estimatedDuration.toFixed(1) + 's'
+            audioType: audioBlob.type,
+            estimatedDuration: estimatedDuration.toFixed(1) + 's',
+            audioUrl: audioUrl.substring(0, 50) + '...'
           })
 
           return {
@@ -148,12 +200,82 @@ export const elevenLabsService = {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
           span.setAttribute("error", errorMessage)
           Sentry.captureException(error)
-          console.error('ElevenLabs speech generation failed:', error)
+          console.error('ElevenLabs speech generation failed:', {
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined
+          })
           
           return {
             success: false,
             error: errorMessage
           }
+        }
+      }
+    )
+  },
+
+  // Test the API connection
+  async testConnection(): Promise<{ success: boolean; error?: string; info?: any }> {
+    return Sentry.startSpan(
+      {
+        op: "ai.voice.test",
+        name: "Test ElevenLabs Connection",
+      },
+      async (span) => {
+        try {
+          if (!this.isConfigured()) {
+            return { 
+              success: false, 
+              error: 'ElevenLabs API key not configured. Please check your .env.local file.' 
+            }
+          }
+
+          console.log('Testing ElevenLabs connection...')
+
+          // Test with a simple request to get user info
+          const response = await fetch(`${ELEVENLABS_BASE_URL}/user`, {
+            headers: {
+              'xi-api-key': ELEVENLABS_API_KEY!
+            }
+          })
+
+          console.log('ElevenLabs test response:', {
+            status: response.status,
+            statusText: response.statusText
+          })
+
+          if (!response.ok) {
+            let errorMessage = `API test failed: ${response.status} ${response.statusText}`
+            
+            try {
+              const errorText = await response.text()
+              const errorData = JSON.parse(errorText)
+              errorMessage = errorData.detail?.message || errorData.message || errorMessage
+            } catch (e) {
+              // Use default error message
+            }
+
+            return { success: false, error: errorMessage }
+          }
+
+          const userData = await response.json()
+          console.log('ElevenLabs connection successful:', userData)
+
+          span.setAttribute("success", true)
+          return { 
+            success: true, 
+            info: {
+              subscription: userData.subscription,
+              characterCount: userData.subscription?.character_count,
+              characterLimit: userData.subscription?.character_limit
+            }
+          }
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Connection test failed'
+          span.setAttribute("error", errorMessage)
+          console.error('ElevenLabs connection test failed:', error)
+          return { success: false, error: errorMessage }
         }
       }
     )

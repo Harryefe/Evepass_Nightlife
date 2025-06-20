@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { 
   Bot, Send, Mic, MicOff, Volume2, VolumeX, 
-  MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2
+  MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2, AlertCircle, CheckCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -83,6 +83,7 @@ function AIAssistantPage() {
   const [selectedVoice, setSelectedVoice] = useState(VOICE_IDS.EVE_FRIENDLY);
   const [isTyping, setIsTyping] = useState(false);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'testing' | 'connected' | 'failed'>('unknown');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -93,6 +94,11 @@ function AIAssistantPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Test ElevenLabs connection on component mount
+    testElevenLabsConnection();
+  }, []);
 
   // Cleanup audio URLs when component unmounts
   useEffect(() => {
@@ -108,6 +114,29 @@ function AIAssistantPage() {
       }
     };
   }, []);
+
+  const testElevenLabsConnection = async () => {
+    setConnectionStatus('testing');
+    
+    try {
+      const response = await fetch('/api/test-elevenlabs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setConnectionStatus('connected');
+      } else {
+        setConnectionStatus('failed');
+        console.error('ElevenLabs connection failed:', result.error);
+      }
+    } catch (error) {
+      setConnectionStatus('failed');
+      console.error('ElevenLabs connection test failed:', error);
+    }
+  };
 
   const handleSendMessage = async () => {
     return Sentry.startSpan(
@@ -143,7 +172,7 @@ function AIAssistantPage() {
             body: JSON.stringify({
               message: currentInput,
               conversationHistory: messages,
-              voiceEnabled,
+              voiceEnabled: voiceEnabled && connectionStatus === 'connected',
               voiceId: selectedVoice,
               context: determineContext(currentInput)
             }),
@@ -172,7 +201,7 @@ function AIAssistantPage() {
           setMessages(prev => [...prev, aiResponse]);
           
           // Auto-play voice response if available
-          if (data.audioUrl && voiceEnabled) {
+          if (data.audioUrl && voiceEnabled && connectionStatus === 'connected') {
             setTimeout(() => playAudio(aiResponse.id, data.audioUrl), 500);
           }
 
@@ -306,6 +335,32 @@ function AIAssistantPage() {
     // In a real app, this would start/stop speech recognition
   };
 
+  const getConnectionStatusIcon = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'failed':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'testing':
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      default:
+        return <AlertCircle className="h-4 w-4 text-gray-400" />;
+    }
+  };
+
+  const getConnectionStatusText = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Voice Ready';
+      case 'failed':
+        return 'Voice Unavailable';
+      case 'testing':
+        return 'Testing Voice...';
+      default:
+        return 'Voice Status Unknown';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-slate-900 to-black text-white">
       {/* Header */}
@@ -330,6 +385,15 @@ function AIAssistantPage() {
               >
                 {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={testElevenLabsConnection}
+                className="text-xs"
+              >
+                {getConnectionStatusIcon()}
+                <span className="ml-1">{getConnectionStatusText()}</span>
+              </Button>
               <Link href="/explore">
                 <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
                   Back to Explore
@@ -349,6 +413,8 @@ function AIAssistantPage() {
                 <div className="flex items-center space-x-3">
                   <Volume2 className="h-4 w-4 text-purple-400" />
                   <span className="text-sm text-white">Voice Settings</span>
+                  {getConnectionStatusIcon()}
+                  <span className="text-xs text-gray-400">{getConnectionStatusText()}</span>
                 </div>
                 <Select value={selectedVoice} onValueChange={setSelectedVoice}>
                   <SelectTrigger className="w-48 bg-white/10 border-purple-500/30 text-white">
@@ -362,6 +428,15 @@ function AIAssistantPage() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {connectionStatus === 'failed' && (
+                <div className="mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+                  <div className="flex items-center space-x-2 text-red-400 text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Voice features unavailable. Check your ElevenLabs API configuration.</span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -393,7 +468,7 @@ function AIAssistantPage() {
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <p className="text-white flex-1">{message.content}</p>
-                          {message.type === 'ai' && message.audioUrl && voiceEnabled && (
+                          {message.type === 'ai' && message.audioUrl && voiceEnabled && connectionStatus === 'connected' && (
                             <Button
                               size="sm"
                               variant="ghost"
