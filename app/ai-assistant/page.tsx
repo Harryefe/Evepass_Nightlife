@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Bot, Send, Mic, MicOff, Volume2, VolumeX, 
-  MapPin, Calendar, CreditCard, Star, Navigation
+  MapPin, Calendar, CreditCard, Star, Navigation, Settings, Loader2
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { VOICE_IDS } from '@/lib/elevenlabs';
+import * as Sentry from '@sentry/nextjs';
 
 // Define interfaces for type safety
 interface Venue {
@@ -30,6 +33,8 @@ interface Message {
   timestamp: Date;
   suggestions?: string[];
   venues?: Venue[];
+  audioUrl?: string;
+  isPlaying?: boolean;
 }
 
 // Mock conversation data
@@ -73,9 +78,12 @@ export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [selectedVoice, setSelectedVoice] = useState(VOICE_IDS.EVE_FRIENDLY);
   const [isTyping, setIsTyping] = useState(false);
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,79 +93,207 @@ export default function AIAssistantPage() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now(),
-      type: 'user',
-      content: inputValue,
-      timestamp: new Date()
+  // Cleanup audio URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      messages.forEach(message => {
+        if (message.audioUrl) {
+          URL.revokeObjectURL(message.audioUrl);
+        }
+      });
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
+  }, []);
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
-    setIsTyping(true);
+  const handleSendMessage = async () => {
+    return Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Send AI Message",
+      },
+      async (span) => {
+        if (!inputValue.trim()) return;
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(inputValue);
-      setMessages(prev => [...prev, aiResponse]);
-      setIsTyping(false);
-    }, 1500);
+        span.setAttribute("message_length", inputValue.length);
+        span.setAttribute("voice_enabled", voiceEnabled);
+
+        const userMessage: Message = {
+          id: Date.now(),
+          type: 'user',
+          content: inputValue,
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        const currentInput = inputValue;
+        setInputValue('');
+        setIsTyping(true);
+
+        try {
+          // Send request to AI API
+          const response = await fetch('/api/ai-response', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: currentInput,
+              conversationHistory: messages,
+              voiceEnabled,
+              voiceId: selectedVoice,
+              context: determineContext(currentInput)
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API request failed: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          
+          if (data.error) {
+            throw new Error(data.error);
+          }
+
+          const aiResponse: Message = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: data.text,
+            timestamp: new Date(),
+            audioUrl: data.audioUrl,
+            suggestions: generateSuggestions(data.text),
+            venues: shouldShowVenues(data.text) ? mockVenueRecommendations : undefined
+          };
+
+          setMessages(prev => [...prev, aiResponse]);
+          
+          // Auto-play voice response if available
+          if (data.audioUrl && voiceEnabled) {
+            setTimeout(() => playAudio(aiResponse.id, data.audioUrl), 500);
+          }
+
+          span.setAttribute("ai_response_success", true);
+          span.setAttribute("has_audio", !!data.audioUrl);
+        } catch (error) {
+          console.error('Failed to get AI response:', error);
+          Sentry.captureException(error);
+          
+          const errorMessage: Message = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment, or feel free to explore the app while I get back online!",
+            timestamp: new Date(),
+            suggestions: ["Find venues", "Check safety features", "Explore social hub"]
+          };
+
+          setMessages(prev => [...prev, errorMessage]);
+          span.setAttribute("ai_response_success", false);
+        } finally {
+          setIsTyping(false);
+        }
+      }
+    );
   };
 
-  const generateAIResponse = (userInput: string): Message => {
-    const input = userInput.toLowerCase();
+  const determineContext = (message: string): string => {
+    const input = message.toLowerCase();
+    if (input.includes('hello') || input.includes('hi') || input.includes('hey')) return 'greeting';
+    if (input.includes('emergency') || input.includes('help') || input.includes('urgent')) return 'emergency';
+    if (input.includes('plan') || input.includes('night out')) return 'helpful';
+    return 'casual';
+  };
+
+  const generateSuggestions = (aiResponse: string): string[] => {
+    const response = aiResponse.toLowerCase();
     
-    if (input.includes('venue') || input.includes('club') || input.includes('bar')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "I found some great venues near you! Here are my top recommendations based on your location and preferences:",
-        timestamp: new Date(),
-        venues: mockVenueRecommendations,
-        suggestions: ["Book a table", "Add to night plan", "Get directions", "See more venues"]
-      };
+    if (response.includes('venue') || response.includes('club')) {
+      return ["Book a table", "See venue details", "Check events tonight", "Get directions"];
+    }
+    if (response.includes('budget') || response.includes('money')) {
+      return ["Set budget limit", "Track spending", "View history", "Budget tips"];
+    }
+    if (response.includes('plan') || response.includes('itinerary')) {
+      return ["Create night plan", "Add venues", "Invite friends", "Set reminders"];
+    }
+    if (response.includes('safe') || response.includes('drunksafe')) {
+      return ["Setup DrunkSafe™", "Add emergency contacts", "Safety tips", "Check BAC"];
     }
     
-    if (input.includes('budget') || input.includes('money') || input.includes('spend')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "Let me help you manage your budget for tonight. Based on your spending history, I recommend setting a limit of £120 for a great night out. Would you like me to track your spending?",
-        timestamp: new Date(),
-        suggestions: ["Set budget limit", "View spending history", "Enable alerts", "Budget tips"]
-      };
+    return ["Find venues", "Plan night", "Safety features", "Social hub"];
+  };
+
+  const shouldShowVenues = (aiResponse: string): boolean => {
+    return aiResponse.toLowerCase().includes('venue') || 
+           aiResponse.toLowerCase().includes('recommend') ||
+           aiResponse.toLowerCase().includes('fabric') ||
+           aiResponse.toLowerCase().includes('ministry');
+  };
+
+  const playAudio = async (messageId: number, audioUrl: string) => {
+    return Sentry.startSpan(
+      {
+        op: "ui.audio.play",
+        name: "Play AI Voice Response",
+      },
+      async (span) => {
+        try {
+          // Stop any currently playing audio
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+          }
+
+          setCurrentlyPlaying(messageId);
+          
+          // Update message state to show playing
+          setMessages(prev => prev.map(msg => 
+            msg.id === messageId 
+              ? { ...msg, isPlaying: true }
+              : { ...msg, isPlaying: false }
+          ));
+
+          // Create and play audio
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+
+          audio.onended = () => {
+            setCurrentlyPlaying(null);
+            setMessages(prev => prev.map(msg => ({ ...msg, isPlaying: false })));
+            audioRef.current = null;
+            // Cleanup the blob URL
+            URL.revokeObjectURL(audioUrl);
+          };
+
+          audio.onerror = (error) => {
+            console.error('Audio playback error:', error);
+            setCurrentlyPlaying(null);
+            setMessages(prev => prev.map(msg => ({ ...msg, isPlaying: false })));
+            audioRef.current = null;
+          };
+
+          await audio.play();
+          span.setAttribute("audio_played", true);
+        } catch (error) {
+          console.error('Failed to play audio:', error);
+          Sentry.captureException(error);
+          setCurrentlyPlaying(null);
+          setMessages(prev => prev.map(msg => ({ ...msg, isPlaying: false })));
+          span.setAttribute("audio_played", false);
+        }
+      }
+    );
+  };
+
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
-    
-    if (input.includes('plan') || input.includes('itinerary')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "I'd love to help you plan the perfect night! Based on your preferences, I suggest starting with pre-drinks at a cocktail bar around 8 PM, then moving to a nightclub by 10:30 PM. Would you like me to create a detailed itinerary?",
-        timestamp: new Date(),
-        suggestions: ["Create night plan", "Find pre-drinks spot", "Book tables", "Set reminders"]
-      };
-    }
-    
-    if (input.includes('safe') || input.includes('safety') || input.includes('drunk')) {
-      return {
-        id: Date.now(),
-        type: 'ai',
-        content: "Safety is my top priority! I can help you stay safe with budget alerts, BAC monitoring, ride reminders, and emergency contacts. Your current safety status looks good. Would you like me to set up any safety features?",
-        timestamp: new Date(),
-        suggestions: ["Set up DrunkSafe", "Add emergency contacts", "Book return ride", "Safety tips"]
-      };
-    }
-    
-    return {
-      id: Date.now(),
-      type: 'ai',
-      content: "I'm here to help with all your nightlife needs! I can assist with venue discovery, night planning, budget management, and safety features. What would you like to explore?",
-      timestamp: new Date(),
-      suggestions: ["Find venues", "Plan night", "Budget help", "Safety features"]
-    };
+    setCurrentlyPlaying(null);
+    setMessages(prev => prev.map(msg => ({ ...msg, isPlaying: false })));
   };
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -167,11 +303,6 @@ export default function AIAssistantPage() {
   const toggleListening = () => {
     setIsListening(!isListening);
     // In a real app, this would start/stop speech recognition
-  };
-
-  const toggleSpeaking = () => {
-    setIsSpeaking(!isSpeaking);
-    // In a real app, this would start/stop text-to-speech
   };
 
   return (
@@ -193,10 +324,10 @@ export default function AIAssistantPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={toggleSpeaking}
-                className={`border-purple-400 ${isSpeaking ? 'text-purple-400 bg-purple-400/20' : 'text-purple-400'}`}
+                onClick={() => setVoiceEnabled(!voiceEnabled)}
+                className={`border-purple-400 ${voiceEnabled ? 'text-purple-400 bg-purple-400/20' : 'text-gray-400'}`}
               >
-                {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
               <Link href="/explore">
                 <Button variant="outline" size="sm" className="border-purple-400 text-purple-400">
@@ -209,6 +340,31 @@ export default function AIAssistantPage() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Voice Settings */}
+        {voiceEnabled && (
+          <Card className="bg-white/5 border-purple-500/20 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Volume2 className="h-4 w-4 text-purple-400" />
+                  <span className="text-sm text-white">Voice Settings</span>
+                </div>
+                <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                  <SelectTrigger className="w-48 bg-white/10 border-purple-500/30 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={VOICE_IDS.EVE_FRIENDLY}>Eve Friendly</SelectItem>
+                    <SelectItem value={VOICE_IDS.EVE_DEFAULT}>Eve Professional</SelectItem>
+                    <SelectItem value={VOICE_IDS.EVE_ENERGETIC}>Eve Energetic</SelectItem>
+                    <SelectItem value={VOICE_IDS.EVE_CALM}>Eve Calm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Chat Messages */}
         <div className="space-y-6 mb-8">
           {messages.map((message) => (
@@ -234,7 +390,23 @@ export default function AIAssistantPage() {
                         : 'bg-white/5 border-blue-500/20'
                     } backdrop-blur-lg`}>
                       <CardContent className="p-4">
-                        <p className="text-white">{message.content}</p>
+                        <div className="flex items-start justify-between">
+                          <p className="text-white flex-1">{message.content}</p>
+                          {message.type === 'ai' && message.audioUrl && voiceEnabled && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => message.isPlaying ? stopAudio() : playAudio(message.id, message.audioUrl!)}
+                              className="ml-2 text-blue-400 hover:text-blue-300"
+                            >
+                              {message.isPlaying ? (
+                                <VolumeX className="h-4 w-4" />
+                              ) : (
+                                <Volume2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
                         
                         {/* Venue Recommendations */}
                         {message.venues && (
@@ -295,10 +467,9 @@ export default function AIAssistantPage() {
                 </div>
                 <Card className="bg-white/5 border-blue-500/20 backdrop-blur-lg">
                   <CardContent className="p-4">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                      <span className="text-blue-400 text-sm">Eve is thinking...</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -317,9 +488,10 @@ export default function AIAssistantPage() {
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && !isTyping && handleSendMessage()}
                   placeholder="Ask Eve anything about nightlife..."
                   className="bg-white/10 border-purple-500/30 text-white placeholder:text-gray-400 pr-12"
+                  disabled={isTyping}
                 />
                 <Button
                   size="sm"
@@ -337,7 +509,11 @@ export default function AIAssistantPage() {
                 disabled={!inputValue.trim() || isTyping}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
-                <Send className="h-4 w-4" />
+                {isTyping ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
             
