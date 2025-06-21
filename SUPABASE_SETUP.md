@@ -23,8 +23,8 @@ After creating your project, add these to your `.env.local` file:
 
 ```env
 # Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://dlaozbknjptzekpxefbp.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsYW96YmtuanB0emVrcHhlZmJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTY0MjMsImV4cCI6MjA2NDk5MjQyM30.DVJKbtpX-ai6z341TrkIVat7eLW1jSU2JEcuro7HuJM
+NEXT_PUBLIC_SUPABASE_URL=https://luawtiehjmfojtqwsisb.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1YXd0aWVoam1mb2p0cXdzaXNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAyODkzNjEsImV4cCI6MjA2NTg2NTM2MX0.PnalZ7RRSmptjCxXU-9cWb-Sq3I01mNyI9oYSZlxiy4
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 
 # App Configuration  
