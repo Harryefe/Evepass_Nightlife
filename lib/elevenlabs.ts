@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 
-// ElevenLabs API configuration - Updated with new API key
-const ELEVENLABS_API_KEY = 'sk_c53c05c01141a4ec985fc7850cd2a06a3d4964e1e653a802'
+// ElevenLabs API configuration - Now using environment variable for security
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1'
 
 // Voice IDs for different personalities
@@ -31,7 +31,11 @@ export interface ElevenLabsResponse {
 export const elevenLabsService = {
   // Check if ElevenLabs is properly configured
   isConfigured(): boolean {
-    const isConfigured = !!ELEVENLABS_API_KEY && ELEVENLABS_API_KEY.startsWith('sk_')
+    const isConfigured = !!(
+      ELEVENLABS_API_KEY && 
+      ELEVENLABS_API_KEY.startsWith('sk_') &&
+      ELEVENLABS_API_KEY.length > 20
+    )
     console.log('ElevenLabs configuration check:', {
       hasApiKey: !!ELEVENLABS_API_KEY,
       keyFormat: ELEVENLABS_API_KEY ? `${ELEVENLABS_API_KEY.substring(0, 5)}...` : 'none',
